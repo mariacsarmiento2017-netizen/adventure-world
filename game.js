@@ -1,746 +1,262 @@
 // ═══════════════════════════════════════════
-//  ADVENTURE WORLD v2
-//  Mundo exterior · Mansión interior
-//  Portales secuenciales · Historia completa
+//  ADVENTURE WORLD v3 — Sistema completo
+//  Supervivencia · Combate · Crafteo · Retos
 // ═══════════════════════════════════════════
 
 // ── ESTADO GLOBAL ──
 const STATE = {
   currentWorld: 'mansion_interior',
-  portalsVisited: [],      // portales completados
-  portalsUnlocked: [1],    // portal 1 siempre disponible
-  mapReadable: false,      // se activa tras completar portal 5
-  secretMapFound: false,   // se activa al leer el mapa en la mansión
+  portalsVisited: [], portalsUnlocked: [1],
+  mapReadable: false, secretMapFound: false,
+  // Supervivencia
+  hp: 100, maxHp: 100,
+  hunger: 100, maxHunger: 100,
+  // Inventario
   inventory: [],
-  character: { name: 'Maca', class: 'explorador', origin: 'overworld', personality: 'valiente' },
-  inventoryOpen: false,
-  mapPanelOpen: false,
-  entryOpen: false,
-  gameStarted: false,
-  endingShown: false
+  // Espada
+  sword: null,          // null | 'madera' | 'piedra' | 'magica'
+  swordEquipped: false,
+  // Retos portales
+  challengeState: {},   // por portal
+  // UI
+  inventoryOpen: false, craftOpen: false, mapPanelOpen: false,
+  entryOpen: false, challengeOpen: false,
+  gameStarted: false, endingShown: false, isDead: false
 };
 
 const INVENTORY_SIZE = 48;
 let selectedClass = 'explorador';
 
-// ── DATOS DE MUNDOS ──
-const WORLDS = {
-  mansion_interior: {
-    name: 'La Mansión — Interior',
-    fogColor: 0xd4c4a0, fogNear: 12, fogFar: 50,
-    ambientColor: 0xfff8e8, ambientI: 2.4,
-    sunColor: 0xfffaee, sunI: 3.0,
-    floorA: 0xc8a060, floorB: 0xe8c880,
-    wallA: 0xd4b870, wallB: 0xb89050,
-    ceilColor: 0xe0d0a8, skyColor: 0x88c8f0,
-    winColor: 0xfffce0
-  },
-  overworld: {
-    name: 'Overworld — Exterior',
-    fogColor: 0xc8e0c8, fogNear: 20, fogFar: 80,
-    ambientColor: 0xffffff, ambientI: 2.8,
-    sunColor: 0xfff5cc, sunI: 3.5,
-    floorA: 0x4a7a30, floorB: 0x3a6020,
-    wallA: 0x5a8a40, wallB: 0x4a7030,
-    ceilColor: 0x87ceeb, skyColor: 0x5bb8f5,
-    winColor: 0xffffff
-  },
-  ignis: {
-    name: 'Portal 1 — Dimensión de Fuego 🔥',
-    fogColor: 0x3a1000, fogNear: 6, fogFar: 28,
-    ambientColor: 0x5a2000, ambientI: 1.5,
-    sunColor: 0xff6600, sunI: 2.5,
-    floorA: 0x4a1800, floorB: 0x6a2800,
-    wallA: 0x5a1800, wallB: 0x3a1000,
-    ceilColor: 0x2a0800, skyColor: 0x1a0400,
-    winColor: 0xff4400
-  },
-  glacium: {
-    name: 'Portal 2 — Dimensión de Hielo ❄️',
-    fogColor: 0xaaccee, fogNear: 8, fogFar: 35,
-    ambientColor: 0xc0ddff, ambientI: 2.0,
-    sunColor: 0xaaddff, sunI: 2.8,
-    floorA: 0x8ab4d8, floorB: 0xaad0f0,
-    wallA: 0x7090b8, wallB: 0x5878a0,
-    ceilColor: 0x6080a8, skyColor: 0x0a2040,
-    winColor: 0x88ccff
-  },
-  void: {
-    name: 'Portal 3 — Dimensión Oscura 🌑',
-    fogColor: 0x080410, fogNear: 5, fogFar: 22,
-    ambientColor: 0x180828, ambientI: 0.9,
-    sunColor: 0xaa66ff, sunI: 1.8,
-    floorA: 0x100820, floorB: 0x180c28,
-    wallA: 0x140a20, wallB: 0x0c0618,
-    ceilColor: 0x080410, skyColor: 0x020106,
-    winColor: 0x8844ff
-  },
-  luz: {
-    name: 'Portal 4 — Dimensión de Luz ☀️',
-    fogColor: 0xfff8e0, fogNear: 15, fogFar: 60,
-    ambientColor: 0xffffff, ambientI: 3.5,
-    sunColor: 0xfffde0, sunI: 4.0,
-    floorA: 0xf0e8c0, floorB: 0xfff8d8,
-    wallA: 0xe8d890, wallB: 0xd8c870,
-    ceilColor: 0xfffff0, skyColor: 0xfff8c0,
-    winColor: 0xffffff
-  },
-  cielo: {
-    name: 'Portal 5 — Dimensión Cielo 🌤️',
-    fogColor: 0xaaddff, fogNear: 18, fogFar: 70,
-    ambientColor: 0xddeeff, ambientI: 2.6,
-    sunColor: 0xffffff, sunI: 3.2,
-    floorA: 0x88bbff, floorB: 0xaaccff,
-    wallA: 0x99bbdd, wallB: 0x7799bb,
-    ceilColor: 0xddeeff, skyColor: 0x55aaff,
-    winColor: 0xffffff
-  }
-};
+// ── RECETAS DE CRAFTEO ──
+const RECIPES = [
+  { id:'sword_madera', name:'Espada de Madera', icon:'🪵', dmg:15,
+    mats:{ madera:3 }, desc:'Daño 15 · Necesitas: 3 maderas' },
+  { id:'sword_piedra', name:'Espada de Piedra',  icon:'🪨', dmg:30,
+    mats:{ madera:2, piedra:3 }, desc:'Daño 30 · Necesitas: 2 maderas + 3 piedras',
+    requires:'sword_madera' },
+  { id:'sword_magica', name:'Espada Mágica ✨',   icon:'⚔️', dmg:60,
+    mats:{ piedra:2, metal:2, cristal_dim:1 }, desc:'Daño 60 · Necesitas: 2 piedras + 2 metal + 1 cristal dimensional',
+    requires:'sword_piedra' },
+];
 
-// ── OBJETOS POR MUNDO ──
-// Cada dimensión tiene el mapa de la SIGUIENTE dimensión
+// ── MATERIALES ──
+// type: 'material' | 'food_raw' | 'food' | 'portal_map' | 'sky_clue' | 'secret_map' | 'key' | 'item'
 const WORLD_OBJECTS = {
   mansion_interior: [
-    { id: 'mansion_item_key',    type: 'item',  x:  2, z: -3, icon: '🗝️', name: 'Llave antigua',      desc: 'Una llave de hierro. Dice "Portal 1" grabado en el metal.' },
-    { id: 'mansion_item_candle', type: 'item',  x: -3, z:  2, icon: '🕯️', name: 'Candelabro de plata', desc: 'Nunca se apaga. Perteneció a la dueña original de la mansión.' },
-    { id: 'mansion_item_clock',  type: 'item',  x:  4, z:  4, icon: '⏰', name: 'Reloj detenido',      desc: 'Marcando las 3:47. El momento en que todo cambió.' },
-    { id: 'mansion_item_letter', type: 'item',  x: -5, z: -4, icon: '✉️', name: 'Carta sellada',       desc: 'Dice: "Quien llegue hasta aquí, busca los portales. El secreto espera."' },
-    // El mapa secreto — solo legible después del Portal 5
-    { id: 'secret_map', type: 'secret_map', x: 0, z: -7, icon: '🗺️', name: 'Mapa antiguo',
-      desc_locked: 'Un mapa muy viejo y desgastado. Las marcas no tienen sentido todavía...',
-      desc_unlocked: '¡Ahora puedes leerlo! El mapa marca claramente la ubicación del Portal Secreto — La Origen. Está al norte de la mansión, más allá del gran árbol.' }
+    { id:'man_letter', type:'item',  x: 2, z:-3, icon:'✉️', name:'Carta sellada',    desc:'Dice: "Busca los portales. El secreto espera."' },
+    { id:'man_candle', type:'item',  x:-3, z: 2, icon:'🕯️', name:'Candelabro',        desc:'Nunca se apaga.' },
+    { id:'man_clock',  type:'item',  x: 4, z: 4, icon:'⏰', name:'Reloj detenido',   desc:'Las 3:47 para siempre.' },
+    { id:'secret_map', type:'secret_map', x:0, z:-7, icon:'🗺️', name:'Mapa antiguo',
+      desc_locked:'Un mapa desgastado. Las marcas no tienen sentido todavía...',
+      desc_unlocked:'¡El Portal Secreto está al norte de la Mansión, más allá del gran árbol!' }
   ],
   overworld: [
-    { id: 'ow_item_compass', type: 'item', x: 15, z: 10,  icon: '🧭', name: 'Brújula de explorador', desc: 'Siempre apunta hacia el próximo portal desbloqueado.' },
-    { id: 'ow_item_flower',  type: 'item', x:-18, z:-12,  icon: '🌸', name: 'Flor dimensional',      desc: 'Crece solo cerca de los portales. Su color cambia con cada dimensión.' },
-    { id: 'ow_item_stone',   type: 'item', x: 22, z:-15,  icon: '💎', name: 'Piedra dimensional',    desc: 'Absorbe la energía de los portales que has visitado.' }
+    // Materiales para craftear
+    { id:'ow_madera1', type:'material', x: 20, z: 8,  icon:'🪵', name:'Madera', mat:'madera', qty:1 },
+    { id:'ow_madera2', type:'material', x:-18, z: 5,  icon:'🪵', name:'Madera', mat:'madera', qty:1 },
+    { id:'ow_madera3', type:'material', x: 15, z:-12, icon:'🪵', name:'Madera', mat:'madera', qty:1 },
+    { id:'ow_piedra1', type:'material', x: 25, z:-10, icon:'🪨', name:'Piedra',  mat:'piedra', qty:1 },
+    { id:'ow_piedra2', type:'material', x:-22, z: 15, icon:'🪨', name:'Piedra',  mat:'piedra', qty:1 },
+    { id:'ow_piedra3', type:'material', x:  8, z: 30, icon:'🪨', name:'Piedra',  mat:'piedra', qty:1 },
+    { id:'ow_compass', type:'item',     x: 15, z: 10, icon:'🧭', name:'Brújula', desc:'Apunta al próximo portal.' }
   ],
   ignis: [
-    // Mapa del Portal 2
-    { id: 'map_to_portal2', type: 'portal_map', x: 0, z: -6, icon: '📜', name: 'Mapa del Portal 2',
-      desc: '¡Encontraste el mapa del Portal 2 — Dimensión de Hielo! Ahora ese portal se ha desbloqueado afuera de la mansión.',
-      unlocks: 2 },
-    { id: 'ignis_item1', type: 'item', x:  5, z:  4, icon: '🔴', name: 'Cristal de fuego',   desc: 'Formado por millones de años de calor. Cálido al tacto eternamente.' },
-    { id: 'ignis_item2', type: 'item', x: -4, z: -5, icon: '⚫', name: 'Obsidiana volcánica', desc: 'Tan afilada que puede cortar el aire mismo.' }
+    // Prueba P1: recoger 3 cristales
+    { id:'ig_crist1', type:'challenge_item', x: 8, z: 6,  icon:'🔴', name:'Cristal de Fuego', challenge:'collect' },
+    { id:'ig_crist2', type:'challenge_item', x:-7, z:-8,  icon:'🔴', name:'Cristal de Fuego', challenge:'collect' },
+    { id:'ig_crist3', type:'challenge_item', x: 3, z:-12, icon:'🔴', name:'Cristal de Fuego', challenge:'collect' },
+    { id:'ig_metal1', type:'material', x: 5, z: 3,  icon:'⛏️', name:'Metal',              mat:'metal',   qty:1 },
+    { id:'ig_metal2', type:'material', x:-4, z:-5,  icon:'⛏️', name:'Metal',              mat:'metal',   qty:1 },
+    { id:'ig_item1',  type:'item',     x:-6, z: 7,  icon:'⚫', name:'Obsidiana volcánica', desc:'Antiquísima y muy caliente.' },
+    { id:'map_p2',    type:'portal_map', x:0, z:-15, icon:'📜', name:'Mapa del Portal 2',
+      desc:'¡Mapa encontrado! El Portal 2 — Hielo se ha desbloqueado.', unlocks:2, locked:true }
   ],
   glacium: [
-    // Mapa del Portal 3
-    { id: 'map_to_portal3', type: 'portal_map', x: 0, z: -6, icon: '📜', name: 'Mapa del Portal 3',
-      desc: '¡Encontraste el mapa del Portal 3 — Dimensión Oscura! Ese portal se ha desbloqueado.',
-      unlocks: 3 },
-    { id: 'glacium_item1', type: 'item', x:  5, z: 3,  icon: '💎', name: 'Cristal de hielo eterno', desc: 'Existe desde antes del tiempo. Nunca se derrite.' },
-    { id: 'glacium_item2', type: 'item', x: -4, z:-5,  icon: '❄️', name: 'Copo de nieve gigante',   desc: 'Cada uno es único en todo el universo.' }
+    // Prueba P2: sobrevivir 60 segundos
+    { id:'gl_cryst1', type:'material', x: 5, z: 3, icon:'💎', name:'Cristal eterno',   mat:'cristal_dim', qty:1 },
+    { id:'gl_item1',  type:'item',     x:-5, z: 5, icon:'❄️', name:'Copo gigante',      desc:'Único en el universo.' },
+    { id:'map_p3',    type:'portal_map', x:0, z:-15, icon:'📜', name:'Mapa del Portal 3',
+      desc:'¡Mapa encontrado! El Portal 3 — Oscuridad se ha desbloqueado.', unlocks:3, locked:true }
   ],
   void: [
-    // Mapa del Portal 4
-    { id: 'map_to_portal4', type: 'portal_map', x: 0, z: -6, icon: '📜', name: 'Mapa del Portal 4',
-      desc: '¡Encontraste el mapa del Portal 4 — Dimensión de Luz! Ese portal se ha desbloqueado.',
-      unlocks: 4 },
-    { id: 'void_item1', type: 'item', x: 4, z:  4, icon: '🔮', name: 'Orbe del vacío',  desc: 'Dentro hay un universo entero en miniatura, expandiéndose lentamente.' },
-    { id: 'void_item2', type: 'item', x:-5, z: -5, icon: '⭐', name: 'Estrella perdida', desc: 'Se separó de su galaxia hace eons. Todavía tibia.' }
+    // Prueba P3: encontrar llave escondida
+    { id:'void_key',  type:'key',  x:-14, z:-14, icon:'🗝️', name:'Llave Oscura',     desc:'Abre el cofre con el mapa.' },
+    { id:'void_orb',  type:'item', x: 4,  z:  4, icon:'🔮', name:'Orbe del vacío',   desc:'Hay un universo dentro.' },
+    { id:'map_p4',    type:'portal_map', x:0, z:-15, icon:'📜', name:'Mapa del Portal 4',
+      desc:'¡Mapa encontrado! El Portal 4 — Luz se ha desbloqueado.', unlocks:4, locked:true }
   ],
   luz: [
-    // Mapa del Portal 5
-    { id: 'map_to_portal5', type: 'portal_map', x: 0, z: -6, icon: '📜', name: 'Mapa del Portal 5',
-      desc: '¡Encontraste el mapa del Portal 5 — Dimensión Cielo! El último portal conocido se ha desbloqueado.',
-      unlocks: 5 },
-    { id: 'luz_item1', type: 'item', x:  5, z: 4, icon: '☀️', name: 'Fragmento de sol',  desc: 'Un trozo de estrella solidificado. Ilumina todo a su alrededor.' },
-    { id: 'luz_item2', type: 'item', x: -4, z:-5, icon: '✨', name: 'Polvo de luz pura',  desc: 'La base de toda creación. Con esto fue hecho el primer mundo.' }
+    // Prueba P4: acertijo (no hay objeto, se activa al entrar)
+    { id:'luz_frag',  type:'material', x: 5, z: 4, icon:'☀️', name:'Fragmento de sol', mat:'cristal_dim', qty:1 },
+    { id:'luz_item1', type:'item',     x:-4, z:-5, icon:'✨', name:'Polvo de luz pura', desc:'La base de toda creación.' },
+    { id:'map_p5',    type:'portal_map', x:0, z:-15, icon:'📜', name:'Mapa del Portal 5',
+      desc:'¡Mapa encontrado! El Portal 5 — Cielo se ha desbloqueado.', unlocks:5, locked:true }
   ],
   cielo: [
-    // Pista del mapa secreto en la mansión
-    { id: 'sky_clue', type: 'sky_clue', x: 0, z: -6, icon: '📖', name: 'Diario del Explorador Original',
-      desc: '¡Encontraste la clave! El diario revela: "El mapa del Portal Secreto — La Origen — siempre estuvo en la Mansión. Oculto a la vista de quien no haya recorrido todos los mundos. Regresa a la Mansión y podrás leerlo."' },
-    { id: 'cielo_item1', type: 'item', x:  5, z: 4, icon: '☁️', name: 'Nube sólida',         desc: 'Tan suave como parece. Pesa exactamente nada.' },
-    { id: 'cielo_item2', type: 'item', x: -5, z:-5, icon: '🌈', name: 'Fragmento de arcoíris', desc: 'Siempre apunta hacia algo hermoso.' }
+    // Prueba P5: parkour + jefe (plataformas generadas en buildDimension)
+    { id:'sky_item1', type:'item',      x: 5, z: 4, icon:'☁️', name:'Nube sólida',          desc:'Pesa exactamente nada.' },
+    { id:'sky_clue',  type:'sky_clue', x:0, z:-18, icon:'📖', name:'Diario del Explorador',
+      desc:'El mapa del Portal Secreto siempre estuvo en la Mansión. Regresa y podrás leerlo.', locked:true }
   ]
 };
 
-// ── PORTALES ──
-// En el overworld exterior (posiciones alrededor de la mansión)
-const PORTAL_DEFS = [
-  { num: 1, id: 'portal_ignis',   world: 'ignis',   x:  35, z: -20, color: 0xff5500, label: 'Fuego 🔥' },
-  { num: 2, id: 'portal_glacium', world: 'glacium', x: -35, z: -15, color: 0x44aaff, label: 'Hielo ❄️' },
-  { num: 3, id: 'portal_void',    world: 'void',    x:  30, z:  30, color: 0x9955ff, label: 'Oscuridad 🌑' },
-  { num: 4, id: 'portal_luz',     world: 'luz',     x: -30, z:  25, color: 0xffee44, label: 'Luz ☀️' },
-  { num: 5, id: 'portal_cielo',   world: 'cielo',   x:   0, z: -45, color: 0x44ccff, label: 'Cielo 🌤️' },
-  // Portal secreto — solo aparece cuando se encuentra el mapa en la mansión
-  { num: 0, id: 'portal_secret',  world: 'secret',  x:   0, z:  50, color: 0xff88ff, label: 'La Origen ✨', secret: true }
+// ── ENEMIGOS POR MUNDO ──
+const ENEMY_DEFS = {
+  overworld: [
+    { type:'lobo',     icon:'🐺', hp:40,  dmg:8,  speed:3.5, xp:10, drop:'carne_cruda', color:0x888888 },
+    { type:'serpiente',icon:'🐍', hp:25,  dmg:5,  speed:2.5, xp:6,  drop:'carne_cruda', color:0x446622 },
+    { type:'jabali',   icon:'🐗', hp:60,  dmg:12, speed:3.0, xp:15, drop:'carne_cruda', color:0x664422 }
+  ],
+  ignis: [
+    { type:'salamandra',icon:'🦎', hp:50,  dmg:10, speed:3.0, xp:12, drop:'metal',       color:0xcc4400 },
+    { type:'imp',       icon:'👹', hp:35,  dmg:8,  speed:4.0, xp:8,  drop:'piedra',       color:0xaa2200 }
+  ],
+  glacium: [
+    { type:'lobo_hielo',icon:'🐺', hp:55,  dmg:12, speed:3.5, xp:14, drop:'carne_cruda', color:0x88aaff },
+    { type:'yeti',      icon:'🦣', hp:80,  dmg:18, speed:2.5, xp:20, drop:'piedra',       color:0xaaccff }
+  ],
+  void: [
+    { type:'sombra',    icon:'👤', hp:45,  dmg:15, speed:4.5, xp:15, drop:'metal',       color:0x440088 },
+    { type:'espectro',  icon:'👻', hp:30,  dmg:10, speed:5.0, xp:10, drop:'madera',      color:0x8844cc }
+  ],
+  luz: [
+    { type:'guardian',  icon:'⚡', hp:65,  dmg:14, speed:3.0, xp:18, drop:'metal',       color:0xffcc00 },
+    { type:'centinela', icon:'🛡️', hp:90,  dmg:20, speed:2.0, xp:25, drop:'piedra',       color:0xddaa00 }
+  ],
+  cielo: [
+    { type:'aguila',    icon:'🦅', hp:50,  dmg:12, speed:4.0, xp:15, drop:'madera',      color:0x4488cc },
+    { type:'tormenta',  icon:'⛈️', hp:70,  dmg:16, speed:3.5, xp:20, drop:'cristal_dim', color:0x2244aa }
+  ]
+};
+
+// Jefes por portal
+const BOSS_DEFS = {
+  ignis:   { name:'Dragón de Lava 🐉',    hp:300, dmg:25, speed:2.5, color:0xff2200 },
+  glacium: { name:'Golem de Hielo 🧊',    hp:400, dmg:20, speed:1.5, color:0x0088ff },
+  void:    { name:'Señor de la Oscuridad 🌑', hp:350, dmg:30, speed:3.0, color:0x6600cc },
+  luz:     { name:'Centinela Dorado ☀️',  hp:380, dmg:22, speed:2.5, color:0xffaa00 },
+  cielo:   { name:'Tormenta Viviente ⛈️', hp:450, dmg:28, speed:3.5, color:0x0044cc }
+};
+
+// Animales de comida
+const FOOD_ANIMALS = [
+  { type:'cerdo',  icon:'🐷', hp:30, dmg:0, speed:2.0, drop:'carne_cruda', color:0xffaaaa },
+  { type:'vaca',   icon:'🐄', hp:40, dmg:0, speed:1.8, drop:'carne_cruda', color:0xeeddcc },
+  { type:'pollo',  icon:'🐔', hp:15, dmg:0, speed:2.5, drop:'carne_cruda', color:0xffffaa }
 ];
 
-// Portal de regreso desde dimensiones
-const RETURN_PORTAL = { id: 'portal_return', world: 'overworld', x: 0, z: 10, color: 0xffcc44 };
+// Acertijos para Portal 4
+const RIDDLES = [
+  { q:'¿Qué tiene dientes pero no puede morder?', opts:['Un perro','Un peine','Una sierra','El tiempo'], a:1 },
+  { q:'¿Cuanto más la secas, más mojada se pone?', opts:['Una toalla','La lluvia','Una esponja','El mar'], a:0 },
+  { q:'¿Qué viaja por el mundo sin moverse del rincón?', opts:['El viento','Una carta','Un sello','El sol'], a:2 },
+  { q:'¿Qué tiene ciudades sin casas, bosques sin árboles y agua sin peces?', opts:['Un sueño','Un mapa','El cielo','Una pintura'], a:1 },
+  { q:'¿Soy ligero como una pluma pero ni el hombre más fuerte me puede sostener por más de 5 minutos?', opts:['Un secreto','El aliento','La luz','El humo'], a:1 }
+];
 
+// ── MUNDOS ──
+const WORLDS = {
+  mansion_interior:{ name:'La Mansión — Interior',  fogColor:0xd4c4a0, fogNear:12, fogFar:50, ambientColor:0xfff8e8, ambientI:2.4, sunColor:0xfffaee, sunI:3.0, floorA:0xc8a060, floorB:0xe8c880, wallA:0xd4b870, wallB:0xb89050, ceilColor:0xe0d0a8, skyColor:0x88c8f0, winColor:0xfffce0 },
+  overworld:       { name:'Overworld — Exterior',    fogColor:0xc8e0c8, fogNear:22, fogFar:80, ambientColor:0xffffff, ambientI:2.8, sunColor:0xfff5cc, sunI:3.5, floorA:0x4a7a30, floorB:0x3a6020, wallA:0x5a8a40, wallB:0x4a7030, ceilColor:0x87ceeb, skyColor:0x5bb8f5, winColor:0xffffff },
+  ignis:           { name:'Portal 1 — Fuego 🔥',    fogColor:0x3a1000, fogNear:6,  fogFar:28, ambientColor:0x5a2000, ambientI:1.5, sunColor:0xff6600, sunI:2.5, floorA:0x4a1800, floorB:0x6a2800, wallA:0x5a1800, wallB:0x3a1000, ceilColor:0x2a0800, skyColor:0x1a0400, winColor:0xff4400 },
+  glacium:         { name:'Portal 2 — Hielo ❄️',    fogColor:0xaaccee, fogNear:8,  fogFar:35, ambientColor:0xc0ddff, ambientI:2.0, sunColor:0xaaddff, sunI:2.8, floorA:0x8ab4d8, floorB:0xaad0f0, wallA:0x7090b8, wallB:0x5878a0, ceilColor:0x6080a8, skyColor:0x0a2040, winColor:0x88ccff },
+  void:            { name:'Portal 3 — Oscuridad 🌑', fogColor:0x080410, fogNear:5,  fogFar:22, ambientColor:0x180828, ambientI:0.9, sunColor:0xaa66ff, sunI:1.8, floorA:0x100820, floorB:0x180c28, wallA:0x140a20, wallB:0x0c0618, ceilColor:0x080410, skyColor:0x020106, winColor:0x8844ff },
+  luz:             { name:'Portal 4 — Luz ☀️',       fogColor:0xfff8e0, fogNear:15, fogFar:60, ambientColor:0xffffff, ambientI:3.5, sunColor:0xfffde0, sunI:4.0, floorA:0xf0e8c0, floorB:0xfff8d8, wallA:0xe8d890, wallB:0xd8c870, ceilColor:0xfffff0, skyColor:0xfff8c0, winColor:0xffffff },
+  cielo:           { name:'Portal 5 — Cielo 🌤️',    fogColor:0xaaddff, fogNear:18, fogFar:70, ambientColor:0xddeeff, ambientI:2.6, sunColor:0xffffff, sunI:3.2, floorA:0x88bbff, floorB:0xaaccff, wallA:0x99bbdd, wallB:0x7799bb, ceilColor:0xddeeff, skyColor:0x55aaff, winColor:0xffffff }
+};
+
+const PORTAL_DEFS = [
+  { num:1, world:'ignis',   x: 35, z:-20, color:0xff5500 },
+  { num:2, world:'glacium', x:-35, z:-15, color:0x44aaff },
+  { num:3, world:'void',    x: 30, z: 30, color:0x9955ff },
+  { num:4, world:'luz',     x:-30, z: 25, color:0xffee44 },
+  { num:5, world:'cielo',   x:  0, z:-45, color:0x44ccff },
+  { num:0, world:'secret',  x:  0, z: 50, color:0xff88ff, secret:true }
+];
+
+// ── ENGINE ──
 let scene, camera, renderer;
-let yaw = 0, pitch = 0;
-let isPointerLocked = false;
-let collectibles = [], portalMeshes = [];
-let clock = new THREE.Clock();
-const keys = { w: false, s: false, a: false, d: false };
-window.keys = keys;
+let yaw=0, pitch=0, isPointerLocked=false;
+let collectibles=[], portalMeshes=[], enemies=[], platforms=[];
+let bossEntity=null;
+let clock=new THREE.Clock();
+const keys={w:false,s:false,a:false,d:false,space:false};
+window.keys=keys;
+
+// Timers
+let hungerTimer=0, waveTimer=0, waveActive=false, waveDuration=60;
+let challengeTimer=0, riddleWrong=0;
+let bossHP=0, bossMaxHP=0;
+let parkourActive=false, playerVY=0;
+let attackCooldown=0;
 
 // ── INICIO ──
-function startNewGame() {
-  const saved = localStorage.getItem('aw2_state');
-  if (saved) { try { const s = JSON.parse(saved); Object.assign(STATE, s); } catch(e) {} }
-  document.getElementById('menu').style.display = 'none';
-  document.getElementById('canvas').style.display = 'block';
-  document.getElementById('hud').style.display = 'block';
-  document.getElementById('inv-char-name').textContent = STATE.character.name;
-  initThreeJS();
+function startNewGame(){
+  const saved=localStorage.getItem('aw3_state');
+  if(saved){try{const s=JSON.parse(saved);Object.assign(STATE,s);}catch(e){}}
+  document.getElementById('menu').style.display='none';
+  document.getElementById('canvas').style.display='block';
+  document.getElementById('hud').style.display='block';
+  document.getElementById('inv-char-name').textContent=STATE.character?.name||'Maca';
+  initEngine();
   buildWorld(STATE.currentWorld);
   buildInventoryUI();
   updateProgressHUD();
-  STATE.gameStarted = true;
+  updateBarsUI();
+  updateSwordHUD();
+  STATE.gameStarted=true;
   requestPointerLock();
 }
-
-function loadGame() { startNewGame(); }
-
-function showCharCreator() { document.getElementById('menu').style.display = 'none'; document.getElementById('char-panel').style.display = 'flex'; }
-function closeCharCreator() { document.getElementById('char-panel').style.display = 'none'; document.getElementById('menu').style.display = 'flex'; }
-function selectClass(el, cls) { document.querySelectorAll('.class-opt').forEach(e => e.classList.remove('selected')); el.classList.add('selected'); selectedClass = cls; }
-function saveCharacter() {
-  const name = document.getElementById('char-name').value.trim() || 'Maca';
-  STATE.character = { name, class: selectedClass, origin: document.getElementById('char-origin').value, personality: document.getElementById('char-personality').value };
-  saveState(); showMsg(`¡Personaje ${name} creado!`);
-  closeCharCreator(); document.getElementById('menu').style.display = 'flex';
+function loadGame(){startNewGame();}
+function showCharCreator(){document.getElementById('menu').style.display='none';document.getElementById('char-panel').style.display='flex';}
+function closeCharCreator(){document.getElementById('char-panel').style.display='none';document.getElementById('menu').style.display='flex';}
+function selectClass(el,cls){document.querySelectorAll('.class-opt').forEach(e=>e.classList.remove('selected'));el.classList.add('selected');selectedClass=cls;}
+function saveCharacter(){
+  const name=document.getElementById('char-name').value.trim()||'Maca';
+  STATE.character={name,class:selectedClass,personality:document.getElementById('char-personality').value};
+  saveState();showMsg(`¡Personaje ${name} creado!`);closeCharCreator();document.getElementById('menu').style.display='flex';
 }
 
-// ── TRES.JS ──
-function initThreeJS() {
-  const canvas = document.getElementById('canvas');
-  renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.3;
-  scene = new THREE.Scene();
-  camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.1, 150);
-  window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-  });
+// ── ENGINE ──
+function initEngine(){
+  const canvas=document.getElementById('canvas');
+  renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+  renderer.setSize(window.innerWidth,window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  renderer.shadowMap.enabled=true;
+  renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+  renderer.toneMapping=THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure=1.3;
+  scene=new THREE.Scene();
+  camera=new THREE.PerspectiveCamera(72,window.innerWidth/window.innerHeight,0.1,150);
+  window.addEventListener('resize',()=>{camera.aspect=window.innerWidth/window.innerHeight;camera.updateProjectionMatrix();renderer.setSize(window.innerWidth,window.innerHeight);});
   setupControls();
   animate();
 }
 
-// ── CONSTRUIR MUNDO ──
-function buildWorld(worldId) {
-  while (scene.children.length) scene.remove(scene.children[0]);
-  collectibles = []; portalMeshes = [];
-
-  const W = WORLDS[worldId] || WORLDS.overworld;
-  scene.background = new THREE.Color(W.skyColor);
-  scene.fog = new THREE.Fog(W.fogColor, W.fogNear, W.fogFar);
-
-  // Iluminación
-  scene.add(new THREE.AmbientLight(W.ambientColor, W.ambientI));
-  const sun = new THREE.DirectionalLight(W.sunColor, W.sunI);
-  sun.position.set(15, 25, 15); sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
-  sun.shadow.camera.left = sun.shadow.camera.bottom = -60;
-  sun.shadow.camera.right = sun.shadow.camera.top = 60;
-  sun.shadow.camera.far = 120; sun.shadow.bias = -0.001;
-  scene.add(sun);
-  const sun2 = new THREE.DirectionalLight(W.sunColor, W.sunI * 0.4);
-  sun2.position.set(-10, 18, -10); scene.add(sun2);
-
-  // Luces de punto distribuidas
-  [[-15,-15],[0,-15],[15,-15],[-15,0],[15,0],[-15,15],[0,15],[15,15]].forEach(([x,z]) => {
-    const pl = new THREE.PointLight(W.sunColor, 1.2, 25);
-    pl.position.set(x, 5, z); scene.add(pl);
-  });
-
-  if (worldId === 'mansion_interior') {
-    buildMansionInterior(W);
-  } else if (worldId === 'overworld') {
-    buildOverworld(W);
-  } else {
-    buildDimension(worldId, W);
-  }
-
-  // Posición inicial de la cámara
-  const startPos = getStartPosition(worldId);
-  camera.position.set(startPos.x, 1.75, startPos.z);
-  yaw = startPos.yaw || 0; pitch = 0;
-  camera.rotation.order = 'YXZ';
-  camera.rotation.y = yaw;
-
-  document.getElementById('world-name').textContent = W.name;
-}
-
-function getStartPosition(worldId) {
-  if (worldId === 'mansion_interior') return { x: 0, z: 8, yaw: Math.PI }; // cerca a la puerta, mirando adentro
-  if (worldId === 'overworld') return { x: 0, z: 18, yaw: Math.PI };       // sale de la mansión
-  return { x: 0, z: 8, yaw: Math.PI };
-}
-
-// ── MANSIÓN INTERIOR ──
-function buildMansionInterior(W) {
-  // Suelo de mosaico
-  const ts = 2, n = 14, h = n / 2;
-  for (let ix = -h; ix < h; ix++) {
-    for (let iz = -h; iz < h; iz++) {
-      const tile = new THREE.Mesh(
-        new THREE.BoxGeometry(ts - 0.04, 0.08, ts - 0.04),
-        new THREE.MeshLambertMaterial({ color: (ix + iz) % 2 === 0 ? W.floorA : W.floorB })
-      );
-      tile.position.set(ix * ts + ts / 2, 0, iz * ts + ts / 2);
-      tile.receiveShadow = true; scene.add(tile);
-    }
-  }
-
-  // Techo
-  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.MeshLambertMaterial({ color: W.ceilColor }));
-  ceil.rotation.x = Math.PI / 2; ceil.position.y = 5.2; scene.add(ceil);
-
-  // Vigas del techo
-  const beamMat = new THREE.MeshLambertMaterial({ color: W.wallB });
-  [-6, 0, 6].forEach(pos => {
-    const b1 = new THREE.Mesh(new THREE.BoxGeometry(28, 0.18, 0.3), beamMat); b1.position.set(0, 5.1, pos); scene.add(b1);
-    const b2 = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.18, 28), beamMat); b2.position.set(pos, 5.1, 0); scene.add(b2);
-  });
-
-  const wMat = new THREE.MeshLambertMaterial({ color: W.wallA });
-  const mMat = new THREE.MeshLambertMaterial({ color: W.wallB });
-  const winMat = new THREE.MeshBasicMaterial({ color: W.winColor, transparent: true, opacity: 0.5, side: THREE.DoubleSide });
-
-  // Paredes laterales (izquierda y derecha)
-  [-13, 13].forEach((pos, idx) => {
-    const wall = new THREE.Mesh(new THREE.BoxGeometry(0.45, 5.2, 28), wMat);
-    wall.position.set(pos, 2.6, 0); wall.castShadow = true; wall.receiveShadow = true; scene.add(wall);
-    // Molduras
-    [0.15, 5.1].forEach(py => {
-      const mold = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.22, 28), mMat);
-      mold.position.set(pos, py, 0); scene.add(mold);
-    });
-    // Ventanas con arcos
-    [-6, 0, 6].forEach(wz => {
-      const fr = new THREE.Mesh(new THREE.BoxGeometry(0.58, 4.0, 2.8), mMat);
-      fr.position.set(pos, 2.8, wz); scene.add(fr);
-      const gl = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 2.2), winMat);
-      gl.position.set(pos + (idx === 0 ? 0.28 : -0.28), 2.8, wz);
-      gl.rotation.y = Math.PI / 2; scene.add(gl);
-      const sp = new THREE.SpotLight(W.winColor, 2.0, 20, Math.PI / 5, 0.5);
-      sp.position.set(pos + (idx === 0 ? -3 : 3), 2.8, wz);
-      sp.target.position.set(0, 0, 0); scene.add(sp); scene.add(sp.target);
-      buildArch(pos, 4.85, wz, 1.4, mMat, Math.PI / 2);
-    });
-  });
-
-  // Pared del fondo (norte)
-  const backWall = new THREE.Mesh(new THREE.BoxGeometry(28, 5.2, 0.45), wMat);
-  backWall.position.set(0, 2.6, -13); backWall.castShadow = true; scene.add(backWall);
-  [0.15, 5.1].forEach(py => { const m = new THREE.Mesh(new THREE.BoxGeometry(28, 0.22, 0.58), mMat); m.position.set(0, py, -13); scene.add(m); });
-  [-8, 0, 8].forEach(wx => {
-    const fr = new THREE.Mesh(new THREE.BoxGeometry(2.8, 4.0, 0.58), mMat);
-    fr.position.set(wx, 2.8, -13); scene.add(fr);
-    const gl = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 3.4), winMat);
-    gl.position.set(wx, 2.8, -12.72); scene.add(gl);
-    buildArch(wx, 4.85, -13, 1.4, mMat, 0);
-    const sp = new THREE.SpotLight(W.winColor, 2.0, 20, Math.PI / 5, 0.5);
-    sp.position.set(wx, 2.8, -16); sp.target.position.set(wx, 1, -13);
-    scene.add(sp); scene.add(sp.target);
-  });
-
-  // Pared frontal con PUERTA (sur)
-  // Segmentos laterales de la pared frontal
-  [-9.5, 9.5].forEach(wx => {
-    const seg = new THREE.Mesh(new THREE.BoxGeometry(9, 5.2, 0.45), wMat);
-    seg.position.set(wx, 2.6, 13); scene.add(seg);
-  });
-  // Dintel encima de la puerta
-  const lintel = new THREE.Mesh(new THREE.BoxGeometry(4.5, 1.5, 0.5), wMat);
-  lintel.position.set(0, 4.45, 13); scene.add(lintel);
-  // Marco de la puerta
-  const doorFrameMat = new THREE.MeshLambertMaterial({ color: 0x5c3a1e });
-  const doorFrame = new THREE.Mesh(new THREE.BoxGeometry(4.8, 4.0, 0.55), doorFrameMat);
-  doorFrame.position.set(0, 2.0, 13); scene.add(doorFrame);
-  // Abertura de la puerta (suelo visible)
-  const doorOpen = new THREE.Mesh(new THREE.BoxGeometry(4.0, 4.5, 0.6), new THREE.MeshBasicMaterial({ color: W.skyColor }));
-  doorOpen.position.set(0, 2.25, 13.05); scene.add(doorOpen);
-  // Molduras frontales
-  [0.15, 5.1].forEach(py => {
-    [-9.5, 9.5].forEach(wx => {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(9, 0.22, 0.58), mMat);
-      m.position.set(wx, py, 13); scene.add(m);
-    });
-  });
-
-  // Pilares interiores
-  const pilMat = new THREE.MeshLambertMaterial({ color: W.wallB });
-  const capMat = new THREE.MeshLambertMaterial({ color: W.wallA });
-  [[-6,-6],[6,-6],[-6,6],[6,6],[-6,0],[6,0]].forEach(([x,z]) => {
-    const pil = new THREE.Mesh(new THREE.BoxGeometry(0.7, 5.0, 0.7), pilMat);
-    pil.position.set(x, 2.5, z); pil.castShadow = true; scene.add(pil);
-    const base = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.3, 1.0), capMat); base.position.set(x, 0.15, z); scene.add(base);
-    const cap = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.28, 1.1), capMat); cap.position.set(x, 5.05, z); scene.add(cap);
-    const fl = new THREE.PointLight(0xffaa44, 1.0, 8); fl.position.set(x + 0.5, 3.5, z + 0.5); scene.add(fl);
-  });
-
-  // Muebles
-  const woodMat = new THREE.MeshLambertMaterial({ color: 0x5c3a1e });
-  const rugMat  = new THREE.MeshLambertMaterial({ color: 0x8b2020 });
-  const rug = new THREE.Mesh(new THREE.BoxGeometry(6, 0.05, 10), rugMat); rug.position.set(0, 0.05, -2); scene.add(rug);
-  const tTop = new THREE.Mesh(new THREE.BoxGeometry(4.5, 0.18, 2.2), woodMat); tTop.position.set(0, 1.02, -4); scene.add(tTop);
-  [[1.8,-0.9],[1.8,0.9],[-1.8,-0.9],[-1.8,0.9]].forEach(([dx,dz]) => {
-    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.12,1.02,0.12), new THREE.MeshLambertMaterial({color:0x3a2010}));
-    leg.position.set(dx, 0.51, -4+dz); scene.add(leg);
-  });
-  // Estantería con libros
-  const sh = new THREE.Mesh(new THREE.BoxGeometry(0.3,4.0,4.5), new THREE.MeshLambertMaterial({color:0x4a2a0e}));
-  sh.position.set(-11.5, 2.0, -6); sh.castShadow = true; scene.add(sh);
-  for (let row = 0; row < 4; row++) for (let col = 0; col < 8; col++) {
-    const bk = new THREE.Mesh(new THREE.BoxGeometry(0.32,0.42,0.3), new THREE.MeshLambertMaterial({color:[0x8b1a1a,0x1a4a8b,0x1a6b2a,0x6b4a1a,0x4a1a6b,0x8b6a1a,0x3a5a3a,0x6a3a1a][col]}));
-    bk.position.set(-11.3, 0.5+row*0.9, -7.8+col*0.5); scene.add(bk);
-  }
-  // Chimenea
-  const stone = new THREE.MeshLambertMaterial({ color: 0x9a8060 });
-  const fm = new THREE.Mesh(new THREE.BoxGeometry(3.6,4.0,0.6), stone); fm.position.set(11.5, 2.0, -6); fm.castShadow=true; scene.add(fm);
-  const hole = new THREE.Mesh(new THREE.BoxGeometry(2.0,1.8,0.8), new THREE.MeshLambertMaterial({color:0x3a2010})); hole.position.set(11.5,1.0,-6); scene.add(hole);
-  const fireL = new THREE.PointLight(0xff7700, 2.8, 14); fireL.position.set(10.8,1.5,-6); scene.add(fireL);
-  [0,0.3,-0.3].forEach((ox,i) => {
-    const fl = new THREE.Mesh(new THREE.SphereGeometry(0.18+i*0.06,8,8), new THREE.MeshBasicMaterial({color:i===0?0xff9900:0xff4400}));
-    fl.position.set(11.2+ox,1.0+i*0.1,-6+ox*0.4); fl.userData.fireFlicker=true; fl.userData.flickerOffset=i*0.6; scene.add(fl);
-  });
-  // Cuadros
-  [0x4a2a6a,0x2a4a2a,0x6a2a2a].forEach((col,i) => {
-    const fr = new THREE.Mesh(new THREE.BoxGeometry(1.8,2.2,0.12), new THREE.MeshLambertMaterial({color:0x8b6914})); fr.position.set(-6+i*6,2.8,-12.7); scene.add(fr);
-    const pt = new THREE.Mesh(new THREE.PlaneGeometry(1.6,2.0), new THREE.MeshLambertMaterial({color:col})); pt.position.set(-6+i*6,2.8,-12.65); scene.add(pt);
-  });
-
-  // Objetos coleccionables
-  (WORLD_OBJECTS.mansion_interior || []).forEach(obj => {
-    if (!STATE.inventory.find(i => i.id === obj.id)) createCollectible(obj, W);
-  });
-
-  // NO hay portales aquí — la salida es la puerta al overworld
-  // Trigger de salida: zona en z > 12 lleva al overworld
-}
-
-// ── OVERWORLD EXTERIOR ──
-function buildOverworld(W) {
-  // Terreno grande de césped
-  const ts = 4, n = 30, h = n / 2;
-  for (let ix = -h; ix < h; ix++) {
-    for (let iz = -h; iz < h; iz++) {
-      const col = (ix + iz) % 2 === 0 ? W.floorA : W.floorB;
-      const tile = new THREE.Mesh(new THREE.BoxGeometry(ts-0.05, 0.1, ts-0.05), new THREE.MeshLambertMaterial({ color: col }));
-      tile.position.set(ix*ts+ts/2, 0, iz*ts+ts/2);
-      tile.receiveShadow = true; scene.add(tile);
-    }
-  }
-
-  // La Mansión (fachada exterior)
-  buildMansionExterior(W);
-
-  // Árboles alrededor
-  buildTrees(W);
-
-  // Caminos de piedra
-  buildPaths(W);
-
-  // Portales en el mundo exterior
-  buildOverworldPortals(W);
-
-  // Objetos del overworld
-  (WORLD_OBJECTS.overworld || []).forEach(obj => {
-    if (!STATE.inventory.find(i => i.id === obj.id)) createCollectible(obj, W);
-  });
-}
-
-function buildMansionExterior(W) {
-  const stoneMat  = new THREE.MeshLambertMaterial({ color: 0xd4b870 });
-  const darkMat   = new THREE.MeshLambertMaterial({ color: 0xb89050 });
-  const roofMat   = new THREE.MeshLambertMaterial({ color: 0x5a4030 });
-  const winMat    = new THREE.MeshBasicMaterial({ color: 0xaaddff, transparent: true, opacity: 0.6, side: THREE.DoubleSide });
-
-  // Cuerpo principal
-  const body = new THREE.Mesh(new THREE.BoxGeometry(28, 14, 18), stoneMat);
-  body.position.set(0, 7, -25); body.castShadow=true; body.receiveShadow=true; scene.add(body);
-
-  // Torre izquierda
-  const tL = new THREE.Mesh(new THREE.BoxGeometry(7, 18, 7), darkMat);
-  tL.position.set(-14, 9, -25); tL.castShadow=true; scene.add(tL);
-  // Torre derecha
-  const tR = new THREE.Mesh(new THREE.BoxGeometry(7, 18, 7), darkMat);
-  tR.position.set(14, 9, -25); tR.castShadow=true; scene.add(tR);
-
-  // Tejado principal
-  const roofGeo = new THREE.CylinderGeometry(0, 16, 5, 4);
-  const roof = new THREE.Mesh(roofGeo, roofMat);
-  roof.position.set(0, 19, -25); roof.rotation.y = Math.PI/4; scene.add(roof);
-  // Tejados torres
-  [[-14,21],[ 14,21]].forEach(([x,y]) => {
-    const tr = new THREE.Mesh(new THREE.CylinderGeometry(0,4.5,5,4), roofMat);
-    tr.position.set(x,y,-25); tr.rotation.y=Math.PI/4; scene.add(tr);
-  });
-
-  // Fachada frontal con detalle
-  // Puerta principal
-  const doorFrameM = new THREE.Mesh(new THREE.BoxGeometry(4.5, 7, 0.6), darkMat);
-  doorFrameM.position.set(0, 3.5, -16); scene.add(doorFrameM);
-  const doorGlass = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 6.0), winMat);
-  doorGlass.position.set(0, 3.5, -15.7); scene.add(doorGlass);
-  buildArch(0, 7.1, -16, 2.3, darkMat, 0);
-
-  // Escalones de entrada
-  [0.15, 0.35, 0.55].forEach((h, i) => {
-    const step = new THREE.Mesh(new THREE.BoxGeometry(6 - i*0.8, 0.22, 0.8), stoneMat);
-    step.position.set(0, h, -14.5 + i*0.9); scene.add(step);
-  });
-
-  // Ventanas fachada
-  [-8, 8, -4, 4].forEach(wx => {
-    const wfr = new THREE.Mesh(new THREE.BoxGeometry(2.5, 3.5, 0.55), darkMat);
-    wfr.position.set(wx, 9, -16); scene.add(wfr);
-    const wgl = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 2.8), winMat);
-    wgl.position.set(wx, 9, -15.73); scene.add(wgl);
-    const sp = new THREE.SpotLight(0xfffce0, 1.0, 12, Math.PI/6, 0.5);
-    sp.position.set(wx, 9, -12); sp.target.position.set(wx, 9, -16);
-    scene.add(sp); scene.add(sp.target);
-  });
-
-  // Luz de entrada
-  const entL = new THREE.PointLight(0xffdd99, 2.5, 12);
-  entL.position.set(0, 5, -14); scene.add(entL);
-}
-
-function buildTrees(W) {
-  const trunkMat = new THREE.MeshLambertMaterial({ color: 0x4a2e10 });
-  const leafColors = [0x2d5a1e, 0x3a6a28, 0x254810];
-  const positions = [
-    [20,8],[20,-8],[20,-20],[-20,8],[-20,-8],[-20,-20],
-    [35,15],[35,-15],[-35,15],[-35,-15],[10,35],[-10,35],
-    [45,5],[45,-5],[-45,5],[-45,-5]
-  ];
-  positions.forEach(([x,z]) => {
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.45,4.5,8), trunkMat);
-    trunk.position.set(x,2.25,z); trunk.castShadow=true; scene.add(trunk);
-    const lc = leafColors[Math.floor(Math.random()*leafColors.length)];
-    const leaf = new THREE.Mesh(new THREE.SphereGeometry(2.2+Math.random(),8,8), new THREE.MeshLambertMaterial({color:lc}));
-    leaf.position.set(x,6+Math.random(),z); leaf.castShadow=true; scene.add(leaf);
-  });
-}
-
-function buildPaths(W) {
-  const pathMat = new THREE.MeshLambertMaterial({ color: 0xc8b490 });
-  // Camino principal a la mansión
-  const mainPath = new THREE.Mesh(new THREE.BoxGeometry(4, 0.12, 35), pathMat);
-  mainPath.position.set(0, 0.06, -5); scene.add(mainPath);
-  // Camino circular alrededor
-  for (let i = 0; i < 24; i++) {
-    const a = (i/24)*Math.PI*2;
-    const seg = new THREE.Mesh(new THREE.BoxGeometry(3.5,0.12,4.5), pathMat);
-    seg.position.set(Math.cos(a)*22, 0.06, Math.sin(a)*22 - 8);
-    seg.rotation.y = a; scene.add(seg);
-  }
-}
-
-function buildOverworldPortals(W) {
-  PORTAL_DEFS.forEach(portal => {
-    if (portal.secret && !STATE.secretMapFound) return; // Portal secreto solo si se encontró el mapa
-    const isUnlocked = STATE.portalsUnlocked.includes(portal.num) || portal.num === 0;
-    const isVisited  = STATE.portalsVisited.includes(portal.num);
-    const alpha = isUnlocked ? 0.42 : 0.15;
-    const emI   = isUnlocked ? 0.7 : 0.2;
-
-    const arch = new THREE.Mesh(
-      new THREE.TorusGeometry(1.8, 0.2, 10, 32),
-      new THREE.MeshLambertMaterial({ color: portal.color, emissive: portal.color, emissiveIntensity: emI })
-    );
-    arch.position.set(portal.x, 2.3, portal.z); scene.add(arch);
-
-    const disk = new THREE.Mesh(
-      new THREE.CircleGeometry(1.72, 32),
-      new THREE.MeshBasicMaterial({ color: portal.color, opacity: alpha, transparent: true, side: THREE.DoubleSide })
-    );
-    disk.position.set(portal.x, 2.3, portal.z + 0.07); scene.add(disk);
-
-    // Columnas
-    [-1.8, 1.8].forEach(dx => {
-      const col = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 4.6, 8), new THREE.MeshLambertMaterial({ color: portal.color, emissive: portal.color, emissiveIntensity: emI * 0.5 }));
-      col.position.set(portal.x + dx, 2.3, portal.z); scene.add(col);
-    });
-
-    // Luz
-    const pl = new THREE.PointLight(portal.color, isUnlocked ? 2.0 : 0.5, isUnlocked ? 12 : 5);
-    pl.position.set(portal.x, 2.3, portal.z); scene.add(pl);
-
-    // Número del portal encima
-    if (portal.num > 0) {
-      const numGeo = new THREE.BoxGeometry(1.0, 0.5, 0.1);
-      const numMat = new THREE.MeshBasicMaterial({ color: portal.color });
-      const numM = new THREE.Mesh(numGeo, numMat);
-      numM.position.set(portal.x, 4.5, portal.z); scene.add(numM);
-    }
-
-    portalMeshes.push({ mesh: arch, portal, disk, light: pl, isUnlocked, isVisited });
-  });
-}
-
-// ── DIMENSIÓN ──
-function buildDimension(worldId, W) {
-  // Suelo de mosaico
-  const ts = 2, n = 20, h = n / 2;
-  for (let ix = -h; ix < h; ix++) {
-    for (let iz = -h; iz < h; iz++) {
-      const tile = new THREE.Mesh(
-        new THREE.BoxGeometry(ts-0.04, 0.08, ts-0.04),
-        new THREE.MeshLambertMaterial({ color: (ix+iz)%2===0 ? W.floorA : W.floorB })
-      );
-      tile.position.set(ix*ts+ts/2, 0, iz*ts+ts/2); tile.receiveShadow=true; scene.add(tile);
-    }
-  }
-
-  // Techo y paredes
-  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(42,42), new THREE.MeshLambertMaterial({color:W.ceilColor}));
-  ceil.rotation.x=Math.PI/2; ceil.position.y=5.2; scene.add(ceil);
-
-  const wMat = new THREE.MeshLambertMaterial({ color: W.wallA });
-  const mMat = new THREE.MeshLambertMaterial({ color: W.wallB });
-  const winMat = new THREE.MeshBasicMaterial({ color: W.winColor, transparent:true, opacity:0.45, side:THREE.DoubleSide });
-
-  [[-20,0,true],[20,0,true],[0,-20,false],[0,20,false]].forEach(([px,pz,vert]) => {
-    const wall = new THREE.Mesh(new THREE.BoxGeometry(vert?0.45:42, 5.2, vert?42:0.45), wMat);
-    wall.position.set(px,2.6,pz); wall.castShadow=true; scene.add(wall);
-    [0.15,5.1].forEach(py=>{
-      const mol = new THREE.Mesh(new THREE.BoxGeometry(vert?0.58:42,0.22,vert?42:0.58),mMat);
-      mol.position.set(px,py,pz); scene.add(mol);
-    });
-    [-8,0,8].forEach(w=>{
-      const fr=new THREE.Mesh(new THREE.BoxGeometry(vert?0.58:2.8,4.0,vert?2.8:0.58),mMat);
-      fr.position.set(vert?px:w,2.8,vert?w:pz); scene.add(fr);
-      const gl=new THREE.Mesh(new THREE.PlaneGeometry(2.2,3.4),winMat);
-      if(vert){gl.position.set(px+(px<0?.28:-.28),2.8,w);gl.rotation.y=Math.PI/2;}
-      else{gl.position.set(w,2.8,pz+(pz<0?.28:-.28));}
-      scene.add(gl);
-      const sp=new THREE.SpotLight(W.winColor,1.8,20,Math.PI/5,0.5);
-      sp.position.set(vert?px+(px<0?-3:3):w,2.8,vert?w:pz+(pz<0?-3:3));
-      sp.target.position.set(0,0,0); scene.add(sp);scene.add(sp.target);
-    });
-  });
-
-  // Pilares
-  const pilMat=new THREE.MeshLambertMaterial({color:W.wallB});
-  [[-8,-8],[8,-8],[-8,8],[8,8],[0,-8],[0,8],[-8,0],[8,0]].forEach(([x,z])=>{
-    const pil=new THREE.Mesh(new THREE.BoxGeometry(0.7,5.0,0.7),pilMat); pil.position.set(x,2.5,z); scene.add(pil);
-    const base=new THREE.Mesh(new THREE.BoxGeometry(1.0,0.3,1.0),new THREE.MeshLambertMaterial({color:W.wallA})); base.position.set(x,.15,z); scene.add(base);
-    const pl2=new THREE.PointLight(W.sunColor,.8,8); pl2.position.set(x+.5,3.5,z+.5); scene.add(pl2);
-  });
-
-  // Decoración especial por dimensión
-  buildDimDecor(worldId, W);
-
-  // Objetos coleccionables
-  (WORLD_OBJECTS[worldId] || []).forEach(obj => {
-    if (!STATE.inventory.find(i => i.id === obj.id)) createCollectible(obj, W);
-  });
-
-  // Portal de regreso al overworld
-  const ret = RETURN_PORTAL;
-  const retArch = new THREE.Mesh(new THREE.TorusGeometry(1.7,0.2,10,32), new THREE.MeshLambertMaterial({color:ret.color,emissive:ret.color,emissiveIntensity:.7}));
-  retArch.position.set(ret.x,2.3,ret.z); scene.add(retArch);
-  const retDisk = new THREE.Mesh(new THREE.CircleGeometry(1.62,32), new THREE.MeshBasicMaterial({color:ret.color,opacity:.38,transparent:true,side:THREE.DoubleSide}));
-  retDisk.position.set(ret.x,2.3,ret.z+.07); scene.add(retDisk);
-  [-1.7,1.7].forEach(dx=>{
-    const col=new THREE.Mesh(new THREE.CylinderGeometry(.16,.2,4.6,8),new THREE.MeshLambertMaterial({color:ret.color}));
-    col.position.set(ret.x+dx,2.3,ret.z); scene.add(col);
-  });
-  const retL=new THREE.PointLight(ret.color,2.0,11); retL.position.set(ret.x,2.3,ret.z); scene.add(retL);
-  portalMeshes.push({ mesh:retArch, portal:{...ret,world:'overworld',num:-1}, disk:retDisk, light:retL, isUnlocked:true });
-}
-
-function buildDimDecor(worldId, W) {
-  if (worldId==='ignis') {
-    for(let i=0;i<8;i++){
-      const m=new THREE.Mesh(new THREE.ConeGeometry(.4,2.5,8),new THREE.MeshLambertMaterial({color:0x8b0000,emissive:0x4a0000}));
-      m.position.set((Math.random()-.5)*20,1.25,(Math.random()-.5)*20); scene.add(m);
-      const l=new THREE.PointLight(0xff4400,1.0,5); l.position.copy(m.position).add(new THREE.Vector3(0,2,0)); scene.add(l);
-    }
-  }
-  if (worldId==='glacium') {
-    for(let i=0;i<14;i++){
-      const m=new THREE.Mesh(new THREE.ConeGeometry(.12,1.2+Math.random(),6),new THREE.MeshLambertMaterial({color:0xaaddff,transparent:true,opacity:.85}));
-      m.position.set((Math.random()-.5)*18,.6,(Math.random()-.5)*18); scene.add(m);
-    }
-    for(let i=0;i<8;i++){
-      const m=new THREE.Mesh(new THREE.OctahedronGeometry(.5+Math.random()*.3),new THREE.MeshLambertMaterial({color:0xcceeFF,transparent:true,opacity:.75}));
-      m.position.set((Math.random()-.5)*16,.5,(Math.random()-.5)*16); m.rotation.set(Math.random(),Math.random(),Math.random()); scene.add(m);
-    }
-  }
-  if (worldId==='void') {
-    for(let i=0;i<15;i++){
-      const m=new THREE.Mesh(new THREE.SphereGeometry(.12+Math.random()*.22,8,8),new THREE.MeshBasicMaterial({color:[0x8844ff,0xaa66ff,0x6622cc][i%3],transparent:true,opacity:.6}));
-      m.position.set((Math.random()-.5)*16,.5+Math.random()*3.5,(Math.random()-.5)*16);
-      m.userData.floatOffset=Math.random()*Math.PI*2; scene.add(m);
-    }
-  }
-  if (worldId==='luz') {
-    for(let i=0;i<12;i++){
-      const m=new THREE.Mesh(new THREE.SphereGeometry(.2+Math.random()*.3,8,8),new THREE.MeshBasicMaterial({color:0xffffaa,transparent:true,opacity:.7}));
-      m.position.set((Math.random()-.5)*16,1+Math.random()*3,(Math.random()-.5)*16);
-      m.userData.floatOffset=Math.random()*Math.PI*2; scene.add(m);
-      const gl=new THREE.PointLight(0xffffcc,.6,4); gl.position.copy(m.position); scene.add(gl);
-    }
-  }
-  if (worldId==='cielo') {
-    for(let i=0;i<10;i++){
-      const m=new THREE.Mesh(new THREE.SphereGeometry(1.5+Math.random(),8,4),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.5}));
-      m.position.set((Math.random()-.5)*18,3+Math.random()*2,(Math.random()-.5)*18);
-      m.userData.floatOffset=Math.random()*Math.PI*2; scene.add(m);
-    }
-  }
-}
-
-function buildArch(cx, cy, cz, r, mat, rotY) {
-  for(let i=0;i<10;i++){
-    const a1=(i/10)*Math.PI, a2=((i+1)/10)*Math.PI;
-    const x1=Math.cos(Math.PI-a1)*r, y1=Math.sin(a1)*r*.55;
-    const x2=Math.cos(Math.PI-a2)*r, y2=Math.sin(a2)*r*.55;
-    const len=Math.sqrt((x2-x1)**2+(y2-y1)**2);
-    const ang=Math.atan2(y2-y1,x2-x1);
-    const seg=new THREE.Mesh(new THREE.BoxGeometry(len+.02,.22,.6),mat);
-    seg.position.set(cx+(x1+x2)/2,cy+(y1+y2)/2,cz);
-    seg.rotation.y=rotY; seg.rotation.z=ang; scene.add(seg);
-  }
-}
-
-// ── COLECCIONABLES ──
-function createCollectible(obj, W) {
-  const isSpecial = obj.type==='portal_map'||obj.type==='sky_clue'||obj.type==='secret_map';
-  const isEntry   = isSpecial;
-  const sz = isEntry ? .5 : .34;
-  const col= isEntry ? 0xffd700 : 0xe8c87a;
-  const mesh=new THREE.Mesh(new THREE.SphereGeometry(sz,16,16),new THREE.MeshLambertMaterial({color:col,emissive:col,emissiveIntensity:isEntry?.72:.25}));
-  mesh.position.set(obj.x,1.2,obj.z); mesh.userData={...obj}; mesh.castShadow=true; scene.add(mesh);
-  const ring=new THREE.Mesh(new THREE.TorusGeometry(sz*1.7,.055,6,20),new THREE.MeshBasicMaterial({color:col}));
-  ring.position.copy(mesh.position); ring.rotation.x=Math.PI/2; scene.add(ring);
-  const glow=new THREE.PointLight(col,isEntry?2.4:.9,isEntry?6:3.5); glow.position.copy(mesh.position); scene.add(glow);
-  collectibles.push({mesh,ring,glow,obj});
-}
-
 // ── CONTROLES ──
-function setupControls() {
+function setupControls(){
   const canvas=document.getElementById('canvas');
-  canvas.addEventListener('click',()=>{if(!STATE.inventoryOpen&&!STATE.mapPanelOpen&&!STATE.entryOpen)requestPointerLock();});
+  canvas.addEventListener('click',()=>{if(noPanel())requestPointerLock();});
   document.addEventListener('pointerlockchange',()=>{isPointerLocked=document.pointerLockElement===canvas;});
   document.addEventListener('mousemove',e=>{if(!isPointerLocked)return;yaw-=e.movementX*.002;pitch-=e.movementY*.002;pitch=Math.max(-Math.PI/3,Math.min(Math.PI/3,pitch));});
+  // Click izquierdo = atacar
+  canvas.addEventListener('mousedown',e=>{if(e.button===0&&isPointerLocked)tryAttack();});
   document.addEventListener('keydown',e=>{
     switch(e.code){
-      case'KeyW':case'ArrowUp':   keys.w=true;break;
-      case'KeyS':case'ArrowDown': keys.s=true;break;
-      case'KeyA':case'ArrowLeft': keys.a=true;break;
-      case'KeyD':case'ArrowRight':keys.d=true;break;
-      case'KeyE':collectNearby();break;
-      case'KeyI':toggleInventory();break;
-      case'KeyM':toggleMap();break;
+      case'KeyW':case'ArrowUp':    keys.w=true;break;
+      case'KeyS':case'ArrowDown':  keys.s=true;break;
+      case'KeyA':case'ArrowLeft':  keys.a=true;break;
+      case'KeyD':case'ArrowRight': keys.d=true;break;
+      case'Space': keys.space=true; e.preventDefault(); break;
+      case'KeyF':  toggleSword(); break;
+      case'KeyE':  collectNearby(); break;
+      case'KeyI':  toggleInventory(); break;
+      case'KeyC':  toggleCraft(); break;
+      case'KeyM':  toggleMap(); break;
       case'Escape':
         if(STATE.inventoryOpen)toggleInventory();
+        else if(STATE.craftOpen)toggleCraft();
         else if(STATE.mapPanelOpen)toggleMap();
         else if(STATE.entryOpen)closeEntry();
         break;
@@ -748,310 +264,895 @@ function setupControls() {
   });
   document.addEventListener('keyup',e=>{
     switch(e.code){
-      case'KeyW':case'ArrowUp':   keys.w=false;break;
-      case'KeyS':case'ArrowDown': keys.s=false;break;
-      case'KeyA':case'ArrowLeft': keys.a=false;break;
-      case'KeyD':case'ArrowRight':keys.d=false;break;
+      case'KeyW':case'ArrowUp':    keys.w=false;break;
+      case'KeyS':case'ArrowDown':  keys.s=false;break;
+      case'KeyA':case'ArrowLeft':  keys.a=false;break;
+      case'KeyD':case'ArrowRight': keys.d=false;break;
+      case'Space': keys.space=false; break;
     }
   });
 }
+function noPanel(){return!STATE.inventoryOpen&&!STATE.craftOpen&&!STATE.mapPanelOpen&&!STATE.entryOpen&&!STATE.challengeOpen;}
 function requestPointerLock(){document.getElementById('canvas').requestPointerLock();}
 
+// ── CONSTRUIR MUNDO ──
+function buildWorld(worldId){
+  while(scene.children.length)scene.remove(scene.children[0]);
+  collectibles=[];portalMeshes=[];enemies=[];platforms=[];bossEntity=null;
+  waveActive=false;parkourActive=false;
+  document.getElementById('wave-hud').style.display='none';
+  document.getElementById('boss-bar').style.display='none';
+  document.getElementById('parkour-hud').style.display='none';
+
+  const W=WORLDS[worldId]||WORLDS.overworld;
+  scene.background=new THREE.Color(W.skyColor);
+  scene.fog=new THREE.Fog(W.fogColor,W.fogNear,W.fogFar);
+
+  // Iluminación
+  scene.add(new THREE.AmbientLight(W.ambientColor,W.ambientI));
+  const sun=new THREE.DirectionalLight(W.sunColor,W.sunI);
+  sun.position.set(15,25,15);sun.castShadow=true;
+  sun.shadow.mapSize.set(2048,2048);
+  sun.shadow.camera.left=sun.shadow.camera.bottom=-60;
+  sun.shadow.camera.right=sun.shadow.camera.top=60;
+  sun.shadow.camera.far=120;sun.shadow.bias=-0.001;scene.add(sun);
+  const sun2=new THREE.DirectionalLight(W.sunColor,W.sunI*.4);sun2.position.set(-10,18,-10);scene.add(sun2);
+  [[-15,-15],[0,-15],[15,-15],[-15,0],[15,0],[-15,15],[0,15],[15,15]].forEach(([x,z])=>{
+    const pl=new THREE.PointLight(W.sunColor,1.2,25);pl.position.set(x,5,z);scene.add(pl);
+  });
+
+  if(worldId==='mansion_interior') buildMansionInt(W);
+  else if(worldId==='overworld')   buildOverworld(W);
+  else                             buildDimension(worldId,W);
+
+  // Posición inicial
+  const sp=getStartPos(worldId);
+  camera.position.set(sp.x,sp.y||1.75,sp.z);
+  yaw=sp.yaw||0;pitch=0;
+  camera.rotation.order='YXZ';camera.rotation.y=yaw;
+  document.getElementById('world-name').textContent=W.name;
+
+  // Iniciar reto si aplica
+  initChallenge(worldId);
+}
+
+function getStartPos(w){
+  if(w==='mansion_interior')return{x:0,z:8,yaw:Math.PI};
+  if(w==='overworld')return{x:0,z:18,yaw:Math.PI};
+  return{x:0,z:8,yaw:Math.PI};
+}
+
+// ── MANSIÓN INTERIOR ──
+function buildMansionInt(W){
+  buildMosaicFloor(W,14);
+  buildCeiling(W,28);
+  buildWalls(W,13,true);
+  buildPillarsRoom(W);
+  buildFurniture(W);
+  spawnObjects('mansion_interior',W);
+}
+
+// ── OVERWORLD ──
+function buildOverworld(W){
+  buildGrassFloor(W);
+  buildMansionExterior(W);
+  buildTreesOverworld();
+  buildPaths(W);
+  buildOverworldPortals(W);
+  spawnFoodAnimals(W);
+  spawnEnemies('overworld',W,5);
+  spawnObjects('overworld',W);
+}
+
+// ── DIMENSIÓN ──
+function buildDimension(worldId,W){
+  buildMosaicFloor(W,20);
+  buildCeiling(W,42);
+  buildWalls(W,20,false);
+  buildPillarsDim(W,worldId);
+  buildDimDecor(worldId,W);
+  spawnObjects(worldId,W);
+  spawnEnemies(worldId,W,4);
+  // Portal de regreso
+  buildReturnPortal(W);
+  // Parkour en cielo
+  if(worldId==='cielo')buildParkourPlatforms(W);
+}
+
+// ── SUELO MOSAICO ──
+function buildMosaicFloor(W,n){
+  const ts=2,h=n/2;
+  for(let ix=-h;ix<h;ix++)for(let iz=-h;iz<h;iz++){
+    const tile=new THREE.Mesh(new THREE.BoxGeometry(ts-.04,.08,ts-.04),new THREE.MeshLambertMaterial({color:(ix+iz)%2===0?W.floorA:W.floorB}));
+    tile.position.set(ix*ts+ts/2,0,iz*ts+ts/2);tile.receiveShadow=true;scene.add(tile);
+  }
+}
+function buildGrassFloor(W){
+  const ts=4,n=32,h=n/2;
+  for(let ix=-h;ix<h;ix++)for(let iz=-h;iz<h;iz++){
+    const tile=new THREE.Mesh(new THREE.BoxGeometry(ts-.05,.1,ts-.05),new THREE.MeshLambertMaterial({color:(ix+iz)%2===0?W.floorA:W.floorB}));
+    tile.position.set(ix*ts+ts/2,0,iz*ts+ts/2);tile.receiveShadow=true;scene.add(tile);
+  }
+}
+function buildCeiling(W,size){
+  const c=new THREE.Mesh(new THREE.PlaneGeometry(size*2,size*2),new THREE.MeshLambertMaterial({color:W.ceilColor}));
+  c.rotation.x=Math.PI/2;c.position.y=5.2;scene.add(c);
+  const bMat=new THREE.MeshLambertMaterial({color:W.wallB});
+  [-6,0,6].forEach(p=>{
+    const b1=new THREE.Mesh(new THREE.BoxGeometry(size*2,.18,.3),bMat);b1.position.set(0,5.1,p);scene.add(b1);
+    const b2=new THREE.Mesh(new THREE.BoxGeometry(.3,.18,size*2),bMat);b2.position.set(p,5.1,0);scene.add(b2);
+  });
+}
+function buildWalls(W,R,withDoor){
+  const wMat=new THREE.MeshLambertMaterial({color:W.wallA});
+  const mMat=new THREE.MeshLambertMaterial({color:W.wallB});
+  const winMat=new THREE.MeshBasicMaterial({color:W.winColor,transparent:true,opacity:.5,side:THREE.DoubleSide});
+  const H=5.2;
+  // Pared norte
+  const wN=new THREE.Mesh(new THREE.BoxGeometry(R*2,H,.45),wMat);wN.position.set(0,H/2,-R);wN.castShadow=true;scene.add(wN);
+  [0.15,H-.1].forEach(py=>{const m=new THREE.Mesh(new THREE.BoxGeometry(R*2,.22,.58),mMat);m.position.set(0,py,-R);scene.add(m);});
+  [-R*.6,0,R*.6].forEach(wx=>{
+    const fr=new THREE.Mesh(new THREE.BoxGeometry(2.8,4.,.58),mMat);fr.position.set(wx,2.8,-R);scene.add(fr);
+    const gl=new THREE.Mesh(new THREE.PlaneGeometry(2.2,3.4),winMat);gl.position.set(wx,2.8,-R+.27);scene.add(gl);
+    const sp=new THREE.SpotLight(W.winColor,2.,20,Math.PI/5,.5);sp.position.set(wx,2.8,-R-3);sp.target.position.set(wx,1,-R);scene.add(sp);scene.add(sp.target);
+    buildArch(wx,4.85,-R,1.4,mMat,0);
+  });
+  // Pared sur (con puerta si withDoor)
+  if(withDoor){
+    [-R*.65,R*.65].forEach(wx=>{
+      const seg=new THREE.Mesh(new THREE.BoxGeometry(R*.7,H,.45),wMat);seg.position.set(wx,H/2,R);seg.castShadow=true;scene.add(seg);
+    });
+    const lintel=new THREE.Mesh(new THREE.BoxGeometry(4.5,1.5,.5),wMat);lintel.position.set(0,4.45,R);scene.add(lintel);
+    const df=new THREE.Mesh(new THREE.BoxGeometry(4.8,4.,.55),new THREE.MeshLambertMaterial({color:0x5c3a1e}));df.position.set(0,2.,R);scene.add(df);
+    const dop=new THREE.Mesh(new THREE.BoxGeometry(4.,4.5,.6),new THREE.MeshBasicMaterial({color:W.skyColor}));dop.position.set(0,2.25,R+.05);scene.add(dop);
+  } else {
+    const wS=new THREE.Mesh(new THREE.BoxGeometry(R*2,H,.45),wMat);wS.position.set(0,H/2,R);wS.castShadow=true;scene.add(wS);
+    [0.15,H-.1].forEach(py=>{const m=new THREE.Mesh(new THREE.BoxGeometry(R*2,.22,.58),mMat);m.position.set(0,py,R);scene.add(m);});
+  }
+  // Paredes laterales
+  [-R,R].forEach((pos,idx)=>{
+    const wall=new THREE.Mesh(new THREE.BoxGeometry(.45,H,R*2),wMat);wall.position.set(pos,H/2,0);wall.castShadow=true;scene.add(wall);
+    [0.15,H-.1].forEach(py=>{const m=new THREE.Mesh(new THREE.BoxGeometry(.58,.22,R*2),mMat);m.position.set(pos,py,0);scene.add(m);});
+    [-R*.6,0,R*.6].forEach(wz=>{
+      const fr=new THREE.Mesh(new THREE.BoxGeometry(.58,4.,2.8),mMat);fr.position.set(pos,2.8,wz);scene.add(fr);
+      const gl=new THREE.Mesh(new THREE.PlaneGeometry(3.4,2.2),winMat);gl.position.set(pos+(idx===0?.28:-.28),2.8,wz);gl.rotation.y=Math.PI/2;scene.add(gl);
+      const sp=new THREE.SpotLight(W.winColor,2.,20,Math.PI/5,.5);sp.position.set(pos+(idx===0?-3:3),2.8,wz);sp.target.position.set(0,0,0);scene.add(sp);scene.add(sp.target);
+      buildArch(pos,4.85,wz,1.4,mMat,Math.PI/2);
+    });
+  });
+}
+function buildArch(cx,cy,cz,r,mat,rotY){
+  for(let i=0;i<10;i++){
+    const a1=(i/10)*Math.PI,a2=((i+1)/10)*Math.PI;
+    const x1=Math.cos(Math.PI-a1)*r,y1=Math.sin(a1)*r*.55;
+    const x2=Math.cos(Math.PI-a2)*r,y2=Math.sin(a2)*r*.55;
+    const len=Math.sqrt((x2-x1)**2+(y2-y1)**2),ang=Math.atan2(y2-y1,x2-x1);
+    const seg=new THREE.Mesh(new THREE.BoxGeometry(len+.02,.22,.6),mat);
+    seg.position.set(cx+(x1+x2)/2,cy+(y1+y2)/2,cz);seg.rotation.y=rotY;seg.rotation.z=ang;scene.add(seg);
+  }
+}
+function buildPillarsRoom(W){
+  const pMat=new THREE.MeshLambertMaterial({color:W.wallB}),cMat=new THREE.MeshLambertMaterial({color:W.wallA});
+  [[-6,-6],[6,-6],[-6,6],[6,6],[-6,0],[6,0]].forEach(([x,z])=>{
+    const p=new THREE.Mesh(new THREE.BoxGeometry(.7,5.,.7),pMat);p.position.set(x,2.5,z);p.castShadow=true;scene.add(p);
+    scene.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(1.,.3,1.),cMat),{position:new THREE.Vector3(x,.15,z)}));
+    scene.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(1.1,.28,1.1),cMat),{position:new THREE.Vector3(x,5.05,z)}));
+    const fl=new THREE.PointLight(0xffaa44,1.,8);fl.position.set(x+.5,3.5,z+.5);scene.add(fl);
+  });
+}
+function buildPillarsDim(W,worldId){
+  const pMat=new THREE.MeshLambertMaterial({color:W.wallB});
+  [[-8,-8],[8,-8],[-8,8],[8,8],[0,-8],[0,8],[-8,0],[8,0]].forEach(([x,z])=>{
+    const p=new THREE.Mesh(new THREE.BoxGeometry(.7,5.,.7),pMat);p.position.set(x,2.5,z);scene.add(p);
+    const pl=new THREE.PointLight(WORLDS[worldId].sunColor,.8,8);pl.position.set(x+.5,3.5,z+.5);scene.add(pl);
+  });
+}
+function buildFurniture(W){
+  const wood=new THREE.MeshLambertMaterial({color:0x5c3a1e}),rug=new THREE.MeshLambertMaterial({color:0x8b2020});
+  scene.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(6,.05,10),rug),{position:new THREE.Vector3(0,.05,-2)}));
+  const t=new THREE.Mesh(new THREE.BoxGeometry(4.5,.18,2.2),wood);t.position.set(0,1.02,-4);t.castShadow=true;scene.add(t);
+  [[1.8,-.9],[1.8,.9],[-1.8,-.9],[-1.8,.9]].forEach(([dx,dz])=>{const l=new THREE.Mesh(new THREE.BoxGeometry(.12,1.02,.12),new THREE.MeshLambertMaterial({color:0x3a2010}));l.position.set(dx,.51,-4+dz);scene.add(l);});
+  const sh=new THREE.Mesh(new THREE.BoxGeometry(.3,4.,4.5),new THREE.MeshLambertMaterial({color:0x4a2a0e}));sh.position.set(-11.5,2.,-6);sh.castShadow=true;scene.add(sh);
+  for(let r=0;r<4;r++)for(let c=0;c<8;c++){const bk=new THREE.Mesh(new THREE.BoxGeometry(.32,.42,.3),new THREE.MeshLambertMaterial({color:[0x8b1a1a,0x1a4a8b,0x1a6b2a,0x6b4a1a,0x4a1a6b,0x8b6a1a,0x3a5a3a,0x6a3a1a][c]}));bk.position.set(-11.3,.5+r*.9,-7.8+c*.5);scene.add(bk);}
+  // Chimenea
+  const sm=new THREE.MeshLambertMaterial({color:0x9a8060});
+  const fm=new THREE.Mesh(new THREE.BoxGeometry(3.6,4.,.6),sm);fm.position.set(11.5,2.,-6);fm.castShadow=true;scene.add(fm);
+  scene.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(2.,1.8,.8),new THREE.MeshLambertMaterial({color:0x3a2010})),{position:new THREE.Vector3(11.5,1.,-6)}));
+  const fL=new THREE.PointLight(0xff7700,2.8,14);fL.position.set(10.8,1.5,-6);scene.add(fL);
+  [0,.3,-.3].forEach((ox,i)=>{const fl=new THREE.Mesh(new THREE.SphereGeometry(.18+i*.06,8,8),new THREE.MeshBasicMaterial({color:i===0?0xff9900:0xff4400}));fl.position.set(11.2+ox,1.+i*.1,-6+ox*.4);fl.userData.fireFlicker=true;fl.userData.flickerOffset=i*.6;scene.add(fl);});
+}
+function buildMansionExterior(W){
+  const sM=new THREE.MeshLambertMaterial({color:0xd4b870}),dM=new THREE.MeshLambertMaterial({color:0xb89050}),rM=new THREE.MeshLambertMaterial({color:0x5a4030});
+  const body=new THREE.Mesh(new THREE.BoxGeometry(28,14,18),sM);body.position.set(0,7,-25);body.castShadow=true;scene.add(body);
+  const tL=new THREE.Mesh(new THREE.BoxGeometry(7,18,7),dM);tL.position.set(-14,9,-25);tL.castShadow=true;scene.add(tL);
+  const tR=new THREE.Mesh(new THREE.BoxGeometry(7,18,7),dM);tR.position.set(14,9,-25);tR.castShadow=true;scene.add(tR);
+  const roof=new THREE.Mesh(new THREE.CylinderGeometry(0,16,5,4),rM);roof.position.set(0,19,-25);roof.rotation.y=Math.PI/4;scene.add(roof);
+  [[-14,21],[14,21]].forEach(([x,y])=>{const tr=new THREE.Mesh(new THREE.CylinderGeometry(0,4.5,5,4),rM);tr.position.set(x,y,-25);tr.rotation.y=Math.PI/4;scene.add(tr);});
+  const df=new THREE.Mesh(new THREE.BoxGeometry(4.5,7,.6),dM);df.position.set(0,3.5,-16);scene.add(df);
+  const eL=new THREE.PointLight(0xffdd99,2.5,12);eL.position.set(0,5,-14);scene.add(eL);
+  [0.15,.35,.55].forEach((h,i)=>{const s=new THREE.Mesh(new THREE.BoxGeometry(6-i*.8,.22,.8),sM);s.position.set(0,h,-14.5+i*.9);scene.add(s);});
+}
+function buildTreesOverworld(){
+  const trunkMat=new THREE.MeshLambertMaterial({color:0x4a2e10});
+  const leafCols=[0x2d5a1e,0x3a6a28,0x254810];
+  [[20,8],[20,-8],[20,-20],[-20,8],[-20,-8],[-20,-20],[35,15],[35,-15],[-35,15],[-35,-15],[10,35],[-10,35],[45,5],[-45,5]].forEach(([x,z])=>{
+    const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.3,.45,4.5,8),trunkMat);trunk.position.set(x,2.25,z);trunk.castShadow=true;scene.add(trunk);
+    trunk.userData.hasWood=true;
+    const leaf=new THREE.Mesh(new THREE.SphereGeometry(2.2+Math.random(),8,8),new THREE.MeshLambertMaterial({color:leafCols[Math.floor(Math.random()*3)]}));
+    leaf.position.set(x,6+Math.random(),z);leaf.castShadow=true;scene.add(leaf);
+  });
+  // Piedras
+  [[25,-10],[−22,15],[8,30],[−15,22],[30,5]].forEach(([x,z])=>{
+    if(x===undefined)return;
+    const s=new THREE.Mesh(new THREE.SphereGeometry(.5+Math.random()*.3,6,6),new THREE.MeshLambertMaterial({color:0x888888}));
+    s.position.set(x,.3,z);s.userData.hasStone=true;scene.add(s);
+  });
+}
+function buildPaths(W){
+  const pMat=new THREE.MeshLambertMaterial({color:0xc8b490});
+  const mp=new THREE.Mesh(new THREE.BoxGeometry(4,.12,35),pMat);mp.position.set(0,.06,-5);scene.add(mp);
+}
+function buildOverworldPortals(W){
+  PORTAL_DEFS.forEach(portal=>{
+    if(portal.secret&&!STATE.secretMapFound)return;
+    const isUnlocked=STATE.portalsUnlocked.includes(portal.num)||(portal.num===0&&STATE.secretMapFound);
+    const emI=isUnlocked?.7:.2,alpha=isUnlocked?.42:.15;
+    const arch=new THREE.Mesh(new THREE.TorusGeometry(1.8,.2,10,32),new THREE.MeshLambertMaterial({color:portal.color,emissive:portal.color,emissiveIntensity:emI}));
+    arch.position.set(portal.x,2.3,portal.z);scene.add(arch);
+    const disk=new THREE.Mesh(new THREE.CircleGeometry(1.72,32),new THREE.MeshBasicMaterial({color:portal.color,opacity:alpha,transparent:true,side:THREE.DoubleSide}));
+    disk.position.set(portal.x,2.3,portal.z+.07);scene.add(disk);
+    [-1.8,1.8].forEach(dx=>{const col=new THREE.Mesh(new THREE.CylinderGeometry(.18,.22,4.6,8),new THREE.MeshLambertMaterial({color:portal.color}));col.position.set(portal.x+dx,2.3,portal.z);scene.add(col);});
+    const pl=new THREE.PointLight(portal.color,isUnlocked?2.:.5,isUnlocked?12:5);pl.position.set(portal.x,2.3,portal.z);scene.add(pl);
+    portalMeshes.push({mesh:arch,portal,disk,light:pl,isUnlocked});
+  });
+}
+function buildReturnPortal(W){
+  const col=0xffcc44;
+  const arch=new THREE.Mesh(new THREE.TorusGeometry(1.7,.2,10,32),new THREE.MeshLambertMaterial({color:col,emissive:col,emissiveIntensity:.7}));
+  arch.position.set(0,2.3,10);scene.add(arch);
+  const disk=new THREE.Mesh(new THREE.CircleGeometry(1.62,32),new THREE.MeshBasicMaterial({color:col,opacity:.38,transparent:true,side:THREE.DoubleSide}));
+  disk.position.set(0,2.3,10.07);scene.add(disk);
+  [-1.7,1.7].forEach(dx=>{const c=new THREE.Mesh(new THREE.CylinderGeometry(.16,.2,4.6,8),new THREE.MeshLambertMaterial({color:col}));c.position.set(dx,2.3,10);scene.add(c);});
+  const pl=new THREE.PointLight(col,2.,11);pl.position.set(0,2.3,10);scene.add(pl);
+  portalMeshes.push({mesh:arch,portal:{world:'overworld',num:-1},disk,light:pl,isUnlocked:true});
+}
+function buildParkourPlatforms(W){
+  const pMat=new THREE.MeshLambertMaterial({color:0x88bbff});
+  const pos=[[0,2,-5],[4,3.5,-10],[-3,5,-15],[5,6.5,-20],[0,8,-25],[0,10,-30]];
+  pos.forEach(([x,y,z],i)=>{
+    const plat=new THREE.Mesh(new THREE.BoxGeometry(3.5,.3,3.5),pMat);
+    plat.position.set(x,y,z);plat.receiveShadow=true;scene.add(plat);
+    platforms.push(plat);
+    if(i>0){const pl=new THREE.PointLight(0x44ccff,.6,6);pl.position.set(x,y+1,z);scene.add(pl);}
+  });
+  parkourActive=true;
+  document.getElementById('parkour-hud').style.display='block';
+}
+function buildDimDecor(worldId,W){
+  if(worldId==='ignis'){for(let i=0;i<8;i++){const m=new THREE.Mesh(new THREE.ConeGeometry(.4,2.5,8),new THREE.MeshLambertMaterial({color:0x8b0000,emissive:0x4a0000}));m.position.set((Math.random()-.5)*18,1.25,(Math.random()-.5)*18);scene.add(m);const l=new THREE.PointLight(0xff4400,1.,5);l.position.copy(m.position).add(new THREE.Vector3(0,2,0));scene.add(l);}}
+  if(worldId==='glacium'){for(let i=0;i<12;i++){const m=new THREE.Mesh(new THREE.ConeGeometry(.12,1.2+Math.random(),6),new THREE.MeshLambertMaterial({color:0xaaddff,transparent:true,opacity:.85}));m.position.set((Math.random()-.5)*18,.6,(Math.random()-.5)*18);scene.add(m);}}
+  if(worldId==='void'){for(let i=0;i<15;i++){const m=new THREE.Mesh(new THREE.SphereGeometry(.12+Math.random()*.2,8,8),new THREE.MeshBasicMaterial({color:[0x8844ff,0xaa66ff,0x6622cc][i%3],transparent:true,opacity:.6}));m.position.set((Math.random()-.5)*16,.5+Math.random()*3,(Math.random()-.5)*16);m.userData.floatOffset=Math.random()*Math.PI*2;scene.add(m);}}
+  if(worldId==='luz'){for(let i=0;i<10;i++){const m=new THREE.Mesh(new THREE.SphereGeometry(.2+Math.random()*.3,8,8),new THREE.MeshBasicMaterial({color:0xffffaa,transparent:true,opacity:.7}));m.position.set((Math.random()-.5)*16,1+Math.random()*3,(Math.random()-.5)*16);m.userData.floatOffset=Math.random()*Math.PI*2;scene.add(m);}}
+  if(worldId==='cielo'){for(let i=0;i<8;i++){const m=new THREE.Mesh(new THREE.SphereGeometry(1.5+Math.random(),8,4),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.5}));m.position.set((Math.random()-.5)*18,3+Math.random()*2,(Math.random()-.5)*18);m.userData.floatOffset=Math.random()*Math.PI*2;scene.add(m);}}
+}
+
+// ── SPAWN OBJETOS ──
+function spawnObjects(worldId,W){
+  const objs=WORLD_OBJECTS[worldId]||[];
+  objs.forEach(obj=>{
+    if(STATE.inventory.find(i=>i.id===obj.id))return;
+    if(obj.type==='portal_map'&&STATE.challengeState[worldId]?.completed!==true)return;// mapa aparece al completar prueba
+    if((obj.type==='sky_clue')&&STATE.challengeState['cielo']?.bossDefeated!==true)return;
+    createCollectible(obj,W);
+  });
+}
+
+function createCollectible(obj,W){
+  const special=obj.type!=='item'&&obj.type!=='material';
+  const sz=special?.48:.32,col=special?0xffd700:obj.type==='material'?0x88aacc:0xe8c87a;
+  const mesh=new THREE.Mesh(new THREE.SphereGeometry(sz,14,14),new THREE.MeshLambertMaterial({color:col,emissive:col,emissiveIntensity:special?.7:.22}));
+  mesh.position.set(obj.x,1.2,obj.z);mesh.userData={...obj};mesh.castShadow=true;scene.add(mesh);
+  const ring=new THREE.Mesh(new THREE.TorusGeometry(sz*1.7,.05,6,20),new THREE.MeshBasicMaterial({color:col}));
+  ring.position.copy(mesh.position);ring.rotation.x=Math.PI/2;scene.add(ring);
+  const glow=new THREE.PointLight(col,special?2.2:.8,special?5:3);glow.position.copy(mesh.position);scene.add(glow);
+  collectibles.push({mesh,ring,glow,obj});
+}
+
+// ── SPAWN ENEMIGOS ──
+function spawnEnemies(worldId,W,count){
+  const defs=ENEMY_DEFS[worldId]||[];if(!defs.length)return;
+  for(let i=0;i<count;i++){
+    const def=defs[Math.floor(Math.random()*defs.length)];
+    spawnEnemy(def,worldId);
+  }
+}
+function spawnEnemy(def,worldId,x,z){
+  const ex=x!==undefined?x:(Math.random()-.5)*28,ez=z!==undefined?z:(Math.random()-.5)*28;
+  const mat=new THREE.MeshLambertMaterial({color:def.color});
+  const mesh=new THREE.Mesh(new THREE.BoxGeometry(.7,1.2,.7),mat);
+  mesh.position.set(ex,0.6,ez);mesh.castShadow=true;scene.add(mesh);
+  // Ojos brillantes
+  const eyeMat=new THREE.MeshBasicMaterial({color:0xff2200});
+  [-1,1].forEach(ex2=>{const eye=new THREE.Mesh(new THREE.SphereGeometry(.08,6,6),eyeMat);eye.position.set(ex2*.18,.25,.36);mesh.add(eye);});
+  const hp=def.hp*(1+STATE.portalsVisited.length*.15);// escala con progreso
+  enemies.push({mesh,def:def,hp,maxHp:hp,worldId,lastAttack:0,isFood:false});
+}
+function spawnFoodAnimals(W){
+  FOOD_ANIMALS.forEach((def,i)=>{
+    for(let j=0;j<3;j++){
+      const ex=(Math.random()-.5)*40,ez=(Math.random()-.5)*40;
+      const mat=new THREE.MeshLambertMaterial({color:def.color});
+      const mesh=new THREE.Mesh(new THREE.BoxGeometry(.9,1.,.9),mat);
+      mesh.position.set(ex,.5,ez);mesh.castShadow=true;scene.add(mesh);
+      enemies.push({mesh,def,hp:def.hp,maxHp:def.hp,worldId:'overworld',lastAttack:0,isFood:true});
+    }
+  });
+}
+
+// ── RETOS DE PORTALES ──
+function initChallenge(worldId){
+  if(worldId==='mansion_interior'||worldId==='overworld')return;
+  if(!STATE.challengeState[worldId])STATE.challengeState[worldId]={completed:false};
+  const cs=STATE.challengeState[worldId];
+  if(cs.completed)return;
+
+  if(worldId==='ignis')   startCollectChallenge(worldId);
+  if(worldId==='glacium') startWaveChallenge(worldId);
+  if(worldId==='void')    startKeyChallenge(worldId);
+  if(worldId==='luz')     startRiddleChallenge(worldId);
+  if(worldId==='cielo')   startBossChallenge(worldId);
+}
+
+function startCollectChallenge(worldId){
+  showMsg('🔴 Recoge los 3 cristales de fuego para obtener el mapa');
+  STATE.challengeState[worldId].collected=0;
+}
+function startWaveChallenge(worldId){
+  showMsg('❄️ ¡Sobrevive 60 segundos para obtener el mapa!');
+  waveActive=true;waveTimer=waveDuration;
+  STATE.challengeState[worldId].surviving=true;
+  document.getElementById('wave-hud').style.display='block';
+  document.getElementById('wave-hud').textContent=`⏱ Sobrevive: ${Math.ceil(waveTimer)}s`;
+  // Oleada cada 10s
+  const waveInt=setInterval(()=>{
+    if(!waveActive){clearInterval(waveInt);return;}
+    spawnEnemy(ENEMY_DEFS.glacium[0],'glacium');
+  },10000);
+}
+function startKeyChallenge(worldId){
+  showMsg('🗝️ Encuentra la llave oscura escondida en la dimensión');
+}
+function startRiddleChallenge(worldId){
+  if(STATE.challengeState[worldId]?.riddleSolved)return;
+  const riddle=RIDDLES[Math.floor(Math.random()*RIDDLES.length)];
+  STATE.challengeState[worldId].riddle=riddle;
+  STATE.challengeState[worldId].wrong=0;
+  showRiddlePanel(riddle,worldId);
+}
+function showRiddlePanel(riddle,worldId){
+  STATE.challengeOpen=true;if(isPointerLocked)document.exitPointerLock();
+  const p=document.getElementById('challenge-panel');
+  document.getElementById('ch-title').textContent='⚡ Prueba del Portal de Luz';
+  document.getElementById('challenge-body').textContent=riddle.q;
+  document.getElementById('challenge-timer').textContent='';
+  document.getElementById('challenge-progress').textContent='Responde correctamente para obtener el mapa';
+  const extra=document.getElementById('ch-extra');extra.innerHTML='';
+  const grid=document.createElement('div');grid.className='riddle-opts';
+  riddle.opts.forEach((opt,i)=>{
+    const btn=document.createElement('button');btn.className='riddle-opt';btn.textContent=opt;
+    btn.onclick=()=>answerRiddle(i,riddle.a,worldId,btn);
+    grid.appendChild(btn);
+  });
+  extra.appendChild(grid);p.style.display='block';
+}
+function answerRiddle(chosen,correct,worldId,btn){
+  if(chosen===correct){
+    btn.classList.add('correct');
+    setTimeout(()=>{
+      closeChallenge();
+      STATE.challengeState[worldId].riddleSolved=true;
+      completeChallenge(worldId);
+    },800);
+  } else {
+    btn.classList.add('wrong');
+    STATE.challengeState[worldId].wrong=(STATE.challengeState[worldId].wrong||0)+1;
+    if(STATE.challengeState[worldId].wrong>=3){
+      closeChallenge();
+      showMsg('❌ ¡Fallaste 3 veces! ¡Aparecen enemigos!');
+      for(let i=0;i<4;i++)spawnEnemy(ENEMY_DEFS.luz[0],'luz');
+    } else {
+      showMsg(`❌ Incorrecto. Te quedan ${3-STATE.challengeState[worldId].wrong} intentos.`);
+      setTimeout(()=>btn.classList.remove('wrong'),600);
+    }
+  }
+}
+function startBossChallenge(worldId){
+  showMsg('🌤️ ¡Cruza las plataformas y derrota al Jefe para continuar!');
+}
+
+function completeChallenge(worldId){
+  STATE.challengeState[worldId].completed=true;
+  showMsg('✅ ¡Prueba superada! El mapa ha aparecido.');
+  saveState();
+  // Hacer aparecer el objeto mapa
+  const W=WORLDS[worldId];
+  const mapObj=WORLD_OBJECTS[worldId]?.find(o=>o.type==='portal_map'||o.type==='sky_clue');
+  if(mapObj&&!STATE.inventory.find(i=>i.id===mapObj.id))createCollectible(mapObj,W);
+}
+
+function closeChallenge(){STATE.challengeOpen=false;document.getElementById('challenge-panel').style.display='none';if(STATE.gameStarted)requestPointerLock();}
+
+// ── BOSS ──
+function spawnBoss(worldId){
+  const def=BOSS_DEFS[worldId];if(!def)return;
+  bossHP=def.hp;bossMaxHP=def.hp;
+  const mat=new THREE.MeshLambertMaterial({color:def.color,emissive:def.color,emissiveIntensity:.3});
+  const mesh=new THREE.Mesh(new THREE.BoxGeometry(2.,2.4,2.),mat);
+  mesh.position.set(0,1.2,-16);mesh.castShadow=true;scene.add(mesh);
+  const eyeMat=new THREE.MeshBasicMaterial({color:0xff0000});
+  [-1,1].forEach(ex=>{const eye=new THREE.Mesh(new THREE.SphereGeometry(.15,6,6),eyeMat);eye.position.set(ex*.5,.4,.95);mesh.add(eye);});
+  bossEntity={mesh,def,hp:def.hp,maxHp:def.hp,worldId,lastAttack:0,isBoss:true};
+  document.getElementById('boss-bar').style.display='block';
+  document.getElementById('boss-name').textContent=def.name;
+  updateBossBar();
+  showMsg(`⚠️ ¡${def.name} ha aparecido!`);
+}
+function updateBossBar(){
+  const pct=(bossEntity?.hp||0)/(bossEntity?.maxHp||1)*100;
+  document.getElementById('boss-fill').style.width=pct+'%';
+}
+
+// ── COMBATE ──
+function tryAttack(){
+  if(!STATE.swordEquipped||!STATE.sword)return;
+  if(attackCooldown>0)return;
+  const swordDmg=RECIPES.find(r=>r.id==='sword_'+STATE.sword)?.dmg||15;
+  attackCooldown=.5;
+  // Flash de ataque
+  const flash=document.getElementById('attack-flash');
+  flash.style.background='rgba(255,220,100,0.18)';
+  setTimeout(()=>{flash.style.background='rgba(255,0,0,0)';},120);
+  // Detectar enemigo cercano
+  let hit=false;
+  const allEnemies=[...enemies];if(bossEntity)allEnemies.push(bossEntity);
+  allEnemies.forEach(en=>{
+    const dist=camera.position.distanceTo(en.mesh.position);
+    if(dist<2.8){
+      en.hp-=swordDmg;hit=true;
+      // Efecto de golpe
+      en.mesh.material.emissive=new THREE.Color(0xff2200);
+      en.mesh.material.emissiveIntensity=.6;
+      setTimeout(()=>{if(en.mesh.material){en.mesh.material.emissive=new THREE.Color(0);en.mesh.material.emissiveIntensity=0;}},200);
+      if(en.hp<=0){
+        if(en.isBoss)defeatBoss(en);
+        else defeatEnemy(en);
+      } else if(en.isBoss) updateBossBar();
+    }
+  });
+  if(!hit)showMsg('El enemigo está demasiado lejos. ¡Acércate más!');
+}
+function defeatEnemy(en){
+  scene.remove(en.mesh);enemies=enemies.filter(e=>e!==en);
+  const drop=en.def.drop;
+  if(drop){
+    const dropDef=getDropDef(drop);
+    if(dropDef){addToInventory(dropDef);showMsg(`${dropDef.icon} ${dropDef.name} obtenida`);}
+  }
+  // Reto oleada: contar
+  if(en.worldId==='glacium'&&STATE.challengeState['glacium']?.surviving){
+    STATE.challengeState['glacium'].killed=(STATE.challengeState['glacium'].killed||0)+1;
+  }
+  // Reto cerdos/vacas/pollos — carne
+  if(en.isFood){showMsg(`🍖 Carne cruda obtenida`);}
+}
+function defeatBoss(en){
+  scene.remove(en.mesh);bossEntity=null;
+  document.getElementById('boss-bar').style.display='none';
+  showMsg(`🏆 ¡${en.def.name} derrotado!`);
+  STATE.challengeState[en.worldId]=STATE.challengeState[en.worldId]||{};
+  STATE.challengeState[en.worldId].bossDefeated=true;
+  completeChallenge(en.worldId);
+}
+function getDropDef(drop){
+  const drops={
+    'carne_cruda':{ id:'cr_'+Date.now(), type:'food_raw', icon:'🥩', name:'Carne cruda', desc:'Cómela para recuperar hambre. +25 hambre', hungerVal:25 },
+    'madera':     { id:'mw_'+Date.now(), type:'material', icon:'🪵', name:'Madera',  mat:'madera', qty:1 },
+    'piedra':     { id:'ps_'+Date.now(), type:'material', icon:'🪨', name:'Piedra',  mat:'piedra', qty:1 },
+    'metal':      { id:'mt_'+Date.now(), type:'material', icon:'⛏️', name:'Metal',   mat:'metal',  qty:1 },
+    'cristal_dim':{ id:'cd_'+Date.now(), type:'material', icon:'💎', name:'Cristal dimensional', mat:'cristal_dim', qty:1 }
+  };
+  return drops[drop]||null;
+}
+function addToInventory(item){
+  if(STATE.inventory.length>=INVENTORY_SIZE)return false;
+  // Apilar materiales
+  if(item.mat){
+    const ex=STATE.inventory.find(i=>i.mat===item.mat);
+    if(ex){ex.qty=(ex.qty||1)+1;buildInventoryUI();return true;}
+  }
+  STATE.inventory.push({...item});buildInventoryUI();saveState();return true;
+}
+
 // ── MOVIMIENTO ──
-function updateMovement(delta) {
-  if(STATE.inventoryOpen||STATE.mapPanelOpen||STATE.entryOpen)return;
+function updateMovement(delta){
+  if(!noPanel())return;
   const euler=new THREE.Euler(0,yaw,0,'YXZ');
   const fwd=new THREE.Vector3(0,0,-1).applyEuler(euler);
   const right=new THREE.Vector3(1,0,0).applyEuler(euler);
-  const vel=new THREE.Vector3(); const spd=7;
+  const vel=new THREE.Vector3();const spd=7;
   if(keys.w)vel.addScaledVector(fwd,spd*delta);
   if(keys.s)vel.addScaledVector(fwd,-spd*delta);
   if(keys.a)vel.addScaledVector(right,-spd*delta);
   if(keys.d)vel.addScaledVector(right,spd*delta);
   camera.position.add(vel);
-  const limit = STATE.currentWorld==='overworld' ? 55 : STATE.currentWorld==='mansion_interior' ? 12 : 18;
+  const limit=STATE.currentWorld==='overworld'?55:STATE.currentWorld==='mansion_interior'?12:18;
   camera.position.x=Math.max(-limit,Math.min(limit,camera.position.x));
   camera.position.z=Math.max(-limit,Math.min(limit,camera.position.z));
-  camera.position.y=1.75;
-  camera.rotation.order='YXZ'; camera.rotation.y=yaw; camera.rotation.x=pitch;
 
-  // Salir de la mansión por la puerta
-  if(STATE.currentWorld==='mansion_interior' && camera.position.z > 11.5) {
-    travelToWorld('overworld');
+  // Gravedad en parkour
+  if(parkourActive){
+    playerVY-=20*delta;
+    camera.position.y+=playerVY*delta;
+    if(keys.space&&camera.position.y<=2.2){playerVY=8;}
+    let onPlat=false;
+    platforms.forEach(plat=>{
+      const py=plat.position.y+.3,px=plat.position.x,pz=plat.position.z;
+      if(Math.abs(camera.position.x-px)<1.9&&Math.abs(camera.position.z-pz)<1.9&&camera.position.y<=py+.5&&camera.position.y>=py-.2){
+        camera.position.y=py+1.75;playerVY=0;onPlat=true;
+      }
+    });
+    if(camera.position.y<.5&&!onPlat){camera.position.y=1.75;playerVY=0;}
+    camera.position.y=Math.max(1.75,camera.position.y);
+    // Al llegar al final del parkour, spawear jefe
+    if(camera.position.z<-25&&!STATE.challengeState['cielo']?.bossSpawned){
+      STATE.challengeState['cielo']={...STATE.challengeState['cielo'],bossSpawned:true};
+      spawnBoss('cielo');
+    }
+  } else {
+    camera.position.y=1.75;
   }
-  // Entrar a la mansión desde el overworld
-  if(STATE.currentWorld==='overworld' && camera.position.z < -13 && Math.abs(camera.position.x) < 2.5) {
-    travelToWorld('mansion_interior');
+
+  camera.rotation.order='YXZ';camera.rotation.y=yaw;camera.rotation.x=pitch;
+  // Salir mansión
+  if(STATE.currentWorld==='mansion_interior'&&camera.position.z>11.5)travelToWorld('overworld');
+  // Entrar mansión
+  if(STATE.currentWorld==='overworld'&&camera.position.z<-13&&Math.abs(camera.position.x)<2.5)travelToWorld('mansion_interior');
+}
+
+// ── SUPERVIVENCIA ──
+function updateSurvival(delta){
+  hungerTimer+=delta;
+  if(hungerTimer>=5){// Hambre baja 1 cada 5s
+    hungerTimer=0;
+    STATE.hunger=Math.max(0,STATE.hunger-1);
+    if(STATE.hunger===0)STATE.hp=Math.max(0,STATE.hp-2);// Sin hambre pierde vida
+    if(STATE.hp<=0)die();
+    updateBarsUI();
+  }
+  if(attackCooldown>0)attackCooldown-=delta;
+}
+
+// ── ENEMIGOS IA ──
+function updateEnemies(delta){
+  const allEn=[...enemies];if(bossEntity)allEn.push(bossEntity);
+  allEn.forEach(en=>{
+    if(!en.mesh.parent)return;
+    const dist=camera.position.distanceTo(en.mesh.position);
+    const range=en.isBoss?18:12;
+    if(dist<range&&!en.isFood){
+      // Moverse hacia el jugador
+      const dir=new THREE.Vector3().subVectors(camera.position,en.mesh.position).normalize();
+      dir.y=0;
+      en.mesh.position.addScaledVector(dir,en.def.speed*delta);
+      en.mesh.lookAt(camera.position.x,en.mesh.position.y,camera.position.z);
+    } else if(en.isFood&&dist<8){
+      // Huir
+      const dir=new THREE.Vector3().subVectors(en.mesh.position,camera.position).normalize();
+      en.mesh.position.addScaledVector(dir,en.def.speed*delta);
+    }
+    // Atacar al jugador
+    const atkRange=en.isBoss?2.5:1.6;
+    if(dist<atkRange&&!en.isFood){
+      const now=Date.now()/1000;
+      if(now-en.lastAttack>1.5){
+        en.lastAttack=now;
+        STATE.hp=Math.max(0,STATE.hp-en.def.dmg);
+        // Flash de daño
+        const flash=document.getElementById('attack-flash');
+        flash.style.background='rgba(255,0,0,0.35)';
+        setTimeout(()=>{flash.style.background='rgba(255,0,0,0)';},200);
+        updateBarsUI();
+        if(STATE.hp<=0)die();
+      }
+    }
+  });
+  // Timer oleada
+  if(waveActive){
+    waveTimer-=delta;
+    document.getElementById('wave-hud').textContent=`⏱ Sobrevive: ${Math.ceil(Math.max(0,waveTimer))}s`;
+    if(waveTimer<=0){
+      waveActive=false;document.getElementById('wave-hud').style.display='none';
+      if(!STATE.challengeState['glacium']?.completed){
+        completeChallenge('glacium');
+        STATE.challengeState['glacium'].completed=true;
+      }
+    }
   }
 }
 
 // ── OBJETOS CERCANOS ──
-function checkNearbyObjects(delta) {
-  if(STATE.inventoryOpen||STATE.mapPanelOpen||STATE.entryOpen)return;
-  let nearest=null, nearestDist=Infinity;
+function checkNearbyObjects(delta){
+  if(!noPanel())return;
+  let nearest=null,nearestDist=Infinity;
   const t=Date.now();
   collectibles.forEach(c=>{
     const dist=camera.position.distanceTo(c.mesh.position);
     if(dist<nearestDist){nearestDist=dist;nearest=c;}
-    c.mesh.position.y=1.2+Math.sin(t*.0018+c.obj.x)*.2;
-    c.ring.position.y=c.mesh.position.y;
-    c.glow.position.copy(c.mesh.position);
-    c.mesh.rotation.y+=delta*1.2; c.ring.rotation.z+=delta*.8;
-    c.glow.intensity=(c.obj.type!=='item'?2.4:.9)+Math.sin(t*.003)*.4;
+    c.mesh.position.y=1.2+Math.sin(t*.0018+c.obj.x)*.18;
+    c.ring.position.y=c.mesh.position.y;c.glow.position.copy(c.mesh.position);
+    c.mesh.rotation.y+=delta*1.2;c.ring.rotation.z+=delta*.8;
   });
   const hint=document.getElementById('interact-hint');
-  if(nearest&&nearestDist<2.8){hint.style.opacity='1';hint.textContent=`[ E ] Recoger — ${nearest.obj.name}`;}
+  if(nearest&&nearestDist<2.8){hint.style.opacity='1';hint.textContent=`[ E ] ${nearest.obj.name}`;}
   else hint.style.opacity='0';
-  if(nearest&&nearestDist<1.7) collectItem(nearest);
-
-  // Animaciones especiales
+  if(nearest&&nearestDist<1.7)collectItem(nearest);
+  // Recoger madera/piedra al acercarse a árbol/piedra
   scene.children.forEach(c=>{
-    if(c.userData.fireFlicker) c.scale.y=1+Math.sin(t*.008+c.userData.flickerOffset)*.22;
-    if(c.userData.floatOffset!==undefined) c.position.y=1.5+Math.sin(t*.001+c.userData.floatOffset)*.55;
+    if(c.userData.hasWood&&camera.position.distanceTo(c.position)<2.5){
+      addToInventory({id:'mw_'+Date.now(),type:'material',icon:'🪵',name:'Madera',mat:'madera',qty:1});
+      c.userData.hasWood=false;showMsg('🪵 Madera recogida');
+    }
+    if(c.userData.hasStone&&camera.position.distanceTo(c.position)<2){
+      addToInventory({id:'ps_'+Date.now(),type:'material',icon:'🪨',name:'Piedra',mat:'piedra',qty:1});
+      c.userData.hasStone=false;showMsg('🪨 Piedra recogida');
+    }
+    if(c.userData.fireFlicker)c.scale.y=1+Math.sin(t*.008+c.userData.flickerOffset)*.22;
+    if(c.userData.floatOffset!==undefined)c.position.y=1.5+Math.sin(t*.001+c.userData.floatOffset)*.55;
   });
 }
-
-function collectNearby() {
-  let nearest=null, nearestDist=Infinity;
+function collectNearby(){
+  let nearest=null,nearestDist=Infinity;
   collectibles.forEach(c=>{const d=camera.position.distanceTo(c.mesh.position);if(d<nearestDist){nearestDist=d;nearest=c;}});
-  if(nearest&&nearestDist<3.2) collectItem(nearest);
+  if(nearest&&nearestDist<3.2)collectItem(nearest);
 }
-
-function collectItem(c) {
-  if(STATE.inventory.find(i=>i.id===c.obj.id)) return;
-  if(STATE.inventory.length>=INVENTORY_SIZE){showMsg('¡Inventario lleno!');return;}
-
-  // Lógica especial según el tipo de objeto
-  if(c.obj.type==='portal_map') {
-    // Desbloquea el siguiente portal
-    const nextNum = c.obj.unlocks;
-    if(!STATE.portalsUnlocked.includes(nextNum)) STATE.portalsUnlocked.push(nextNum);
-    if(!STATE.portalsVisited.includes(getCurrentPortalNum())) {
-      STATE.portalsVisited.push(getCurrentPortalNum());
+function collectItem(c){
+  if(STATE.inventory.find(i=>i.id===c.obj.id))return;
+  if(c.obj.type==='portal_map'){
+    const nextNum=c.obj.unlocks;
+    if(!STATE.portalsUnlocked.includes(nextNum))STATE.portalsUnlocked.push(nextNum);
+    if(!STATE.portalsVisited.includes(getCurrentPortalNum()))STATE.portalsVisited.push(getCurrentPortalNum());
+    addToInventory({...c.obj});
+    scene.remove(c.mesh);scene.remove(c.ring);scene.remove(c.glow);collectibles=collectibles.filter(x=>x!==c);
+    showEntry(c.obj.name,c.obj.desc,`${WORLDS[STATE.currentWorld].name}`);
+    updateProgressHUD();saveState();return;
+  }
+  if(c.obj.type==='sky_clue'){
+    if(!STATE.portalsVisited.includes(5))STATE.portalsVisited.push(5);
+    STATE.mapReadable=true;
+    addToInventory({...c.obj});
+    scene.remove(c.mesh);scene.remove(c.ring);scene.remove(c.glow);collectibles=collectibles.filter(x=>x!==c);
+    showEntry(c.obj.name,c.obj.desc,'Dimensión Cielo');
+    showMsg('✨ ¡Regresa a la Mansión y lee el mapa!');updateProgressHUD();saveState();return;
+  }
+  if(c.obj.type==='secret_map'){
+    if(!STATE.mapReadable){showMsg('Este mapa aún no tiene sentido... Sigue explorando.');return;}
+    STATE.secretMapFound=true;addToInventory({...c.obj,desc:c.obj.desc_unlocked});
+    scene.remove(c.mesh);scene.remove(c.ring);scene.remove(c.glow);collectibles=collectibles.filter(x=>x!==c);
+    showEntry('Mapa Antiguo',c.obj.desc_unlocked,'La Mansión — Secreto revelado');
+    updateProgressHUD();saveState();return;
+  }
+  if(c.obj.type==='key'){
+    addToInventory({...c.obj});
+    scene.remove(c.mesh);scene.remove(c.ring);scene.remove(c.glow);collectibles=collectibles.filter(x=>x!==c);
+    showMsg('🗝️ Llave oscura obtenida — ahora encuentra el cofre con el mapa');
+    // Llave desbloquea el mapa_p4 para void
+    const mapObj=WORLD_OBJECTS['void']?.find(o=>o.type==='portal_map');
+    if(mapObj&&!collectibles.find(c2=>c2.obj.id===mapObj.id)&&!STATE.inventory.find(i=>i.id===mapObj.id)){
+      createCollectible(mapObj,WORLDS['void']);
+      STATE.challengeState['void']=STATE.challengeState['void']||{};
+      STATE.challengeState['void'].completed=true;
     }
-    STATE.inventory.push({...c.obj});
-    scene.remove(c.mesh); scene.remove(c.ring); scene.remove(c.glow);
-    collectibles=collectibles.filter(x=>x!==c);
-    showMsg(`${c.obj.icon} ${c.obj.name} — Portal ${nextNum} desbloqueado`);
-    showEntry(c.obj.name, c.obj.desc, `Encontrado en: ${WORLDS[STATE.currentWorld].name}`);
-    updateProgressHUD(); buildInventoryUI(); saveState();
     return;
   }
-
-  if(c.obj.type==='sky_clue') {
-    // Completa el portal 5 y habilita leer el mapa en la mansión
-    if(!STATE.portalsVisited.includes(5)) STATE.portalsVisited.push(5);
-    STATE.mapReadable = true;
-    STATE.inventory.push({...c.obj});
-    scene.remove(c.mesh); scene.remove(c.ring); scene.remove(c.glow);
-    collectibles=collectibles.filter(x=>x!==c);
-    showMsg('✨ ¡El mapa en la Mansión ahora puede ser leído!');
-    showEntry(c.obj.name, c.obj.desc, `Encontrado en: ${WORLDS.cielo.name}`);
-    updateProgressHUD(); buildInventoryUI(); saveState();
+  if(c.obj.type==='challenge_item'){
+    addToInventory({...c.obj,type:'item'});
+    scene.remove(c.mesh);scene.remove(c.ring);scene.remove(c.glow);collectibles=collectibles.filter(x=>x!==c);
+    const cs=STATE.challengeState['ignis']=STATE.challengeState['ignis']||{};
+    cs.collected=(cs.collected||0)+1;
+    showMsg(`🔴 Cristal ${cs.collected}/3 recogido`);
+    if(cs.collected>=3){cs.completed=true;completeChallenge('ignis');}
     return;
   }
-
-  if(c.obj.type==='secret_map') {
-    if(!STATE.mapReadable) {
-      // No se puede leer todavía
-      showMsg('Este mapa está desgastado... no puedes entender nada todavía.');
-      showEntry(c.obj.name, c.obj.desc_locked, 'La Mansión');
-      return;
-    }
-    // Se puede leer — desbloquea el portal secreto
-    STATE.secretMapFound = true;
-    STATE.inventory.push({...c.obj, desc: c.obj.desc_unlocked});
-    scene.remove(c.mesh); scene.remove(c.ring); scene.remove(c.glow);
-    collectibles=collectibles.filter(x=>x!==c);
-    showMsg('🗺️ ¡Has encontrado el mapa del Portal Secreto!');
-    showEntry('Mapa Antiguo', c.obj.desc_unlocked, 'La Mansión — El secreto revelado');
-    updateProgressHUD(); buildInventoryUI(); saveState();
-    return;
+  if(c.obj.type==='material'){
+    addToInventory({...c.obj});
+    scene.remove(c.mesh);scene.remove(c.ring);scene.remove(c.glow);collectibles=collectibles.filter(x=>x!==c);
+    showMsg(`${c.obj.icon} ${c.obj.name} recogida`);return;
   }
-
-  // Objeto normal
-  STATE.inventory.push({...c.obj});
-  scene.remove(c.mesh); scene.remove(c.ring); scene.remove(c.glow);
-  collectibles=collectibles.filter(x=>x!==c);
+  addToInventory({...c.obj});
+  scene.remove(c.mesh);scene.remove(c.ring);scene.remove(c.glow);collectibles=collectibles.filter(x=>x!==c);
   showMsg(`${c.obj.icon} ${c.obj.name} recogido`);
-  buildInventoryUI(); saveState();
-}
-
-function getCurrentPortalNum() {
-  const map = { ignis:1, glacium:2, void:3, luz:4, cielo:5 };
-  return map[STATE.currentWorld] || 0;
 }
 
 // ── PORTALES ──
-function checkPortals(delta) {
-  if(STATE.inventoryOpen||STATE.mapPanelOpen||STATE.entryOpen) return;
+function checkPortals(delta){
+  if(!noPanel())return;
   portalMeshes.forEach(pm=>{
     const dist=camera.position.distanceTo(pm.mesh.position);
-    pm.mesh.rotation.z+=delta*.7; pm.disk.rotation.z-=delta*.4;
-    pm.light.intensity=(pm.isUnlocked?2.0:.5)+Math.sin(Date.now()*.003)*.3;
-
-    if(dist<2.0) {
-      const pNum = pm.portal.num;
-      // Portal de regreso siempre funciona
-      if(pNum===-1) { travelToWorld('overworld'); return; }
-      // Portal secreto
-      if(pNum===0) {
-        if(STATE.secretMapFound) showEnding();
-        else showLockedMsg('Necesitas encontrar el mapa en la Mansión para abrir este portal.');
-        return;
-      }
-      // Portales numerados
-      if(!pm.isUnlocked || !STATE.portalsUnlocked.includes(pNum)) {
-        const needed = pNum - 1;
-        showLockedMsg(`Portal ${pNum} bloqueado. Primero visita el Portal ${needed} y encuentra el mapa.`);
-      } else if(pm.portal.world !== STATE.currentWorld) {
-        travelToWorld(pm.portal.world);
-      }
+    pm.mesh.rotation.z+=delta*.7;pm.disk.rotation.z-=delta*.4;
+    pm.light.intensity=(pm.isUnlocked?2.:.5)+Math.sin(Date.now()*.003)*.3;
+    if(dist<2.){
+      const pNum=pm.portal.num;
+      if(pNum===-1){travelToWorld('overworld');return;}
+      if(pNum===0){STATE.secretMapFound?showEnding():showLockedMsg('Encuentra el mapa en la Mansión primero.');return;}
+      if(!pm.isUnlocked||!STATE.portalsUnlocked.includes(pNum)){showLockedMsg(`Portal ${pNum} bloqueado. Visita el Portal ${pNum-1} primero.`);return;}
+      if(pm.portal.world!==STATE.currentWorld)travelToWorld(pm.portal.world);
     }
   });
 }
 
-function showLockedMsg(text) {
-  const el=document.getElementById('locked-msg');
-  document.getElementById('locked-text').textContent=text;
-  el.style.display='block';
-  clearTimeout(el._t); el._t=setTimeout(()=>{el.style.display='none';},3000);
-}
-
-function travelToWorld(worldId) {
-  if(worldId===STATE.currentWorld) return;
-  // Marcar portal visitado al salir de una dimensión
-  const pNum = getCurrentPortalNum();
-  if(pNum>0 && !STATE.portalsVisited.includes(pNum)) STATE.portalsVisited.push(pNum);
-
+function getCurrentPortalNum(){return{ignis:1,glacium:2,void:3,luz:4,cielo:5}[STATE.currentWorld]||0;}
+function travelToWorld(worldId){
+  if(worldId===STATE.currentWorld)return;
+  const pNum=getCurrentPortalNum();
+  if(pNum>0&&!STATE.portalsVisited.includes(pNum))STATE.portalsVisited.push(pNum);
   const loading=document.getElementById('loading');
   document.getElementById('loading-text').textContent=`Viajando a ${WORLDS[worldId]?.name||worldId}...`;
   loading.style.display='flex';
-  setTimeout(()=>{
-    STATE.currentWorld=worldId;
-    buildWorld(worldId);
-    updateProgressHUD();
-    saveState();
-    loading.style.display='none';
-  },1400);
+  setTimeout(()=>{STATE.currentWorld=worldId;buildWorld(worldId);updateProgressHUD();saveState();loading.style.display='none';},1400);
 }
 
-function showEnding() {
-  STATE.endingShown=true;
-  const charName=STATE.character.name;
-  document.getElementById('ending-text').textContent=`Lo encontraste, ${charName}. El portal que une todos los mundos. Ahora entiendes por qué la mansión existía, por qué los portales te llamaban. Todo comenzó aquí, en La Origen... y aquí termina tu viaje.`;
-  document.getElementById('canvas').style.display='none';
-  document.getElementById('hud').style.display='none';
-  document.getElementById('ending').style.display='flex';
+// ── MUERTE ──
+function die(){
+  if(STATE.isDead)return;STATE.isDead=true;
+  STATE.inventory=[];STATE.hp=STATE.maxHp;STATE.hunger=STATE.maxHunger;
+  document.getElementById('death-screen').style.display='flex';
+  if(isPointerLocked)document.exitPointerLock();
+  saveState();
+}
+window.respawn=function(){
+  STATE.isDead=false;
+  document.getElementById('death-screen').style.display='none';
+  buildInventoryUI();updateBarsUI();
+  travelToWorld('mansion_interior');
+  setTimeout(requestPointerLock,200);
+};
+
+// ── CRAFTEO ──
+function countMat(mat){return STATE.inventory.filter(i=>i.mat===mat).reduce((s,i)=>s+(i.qty||1),0);}
+function hasMats(mats){return Object.entries(mats).every(([mat,qty])=>countMat(mat)>=qty);}
+function consumeMats(mats){
+  Object.entries(mats).forEach(([mat,qty])=>{
+    let rem=qty;
+    STATE.inventory=STATE.inventory.filter(i=>{
+      if(i.mat!==mat||rem<=0)return true;
+      const take=Math.min(i.qty||1,rem);i.qty=(i.qty||1)-take;rem-=take;return i.qty>0;
+    });
+  });
+}
+function craftItem(recipeId){
+  const rec=RECIPES.find(r=>r.id===recipeId);if(!rec)return;
+  if(rec.requires){const req=RECIPES.find(r=>r.id===rec.requires);if(!req||STATE.sword!==req.id.replace('sword_',''))return showMsg('Primero necesitas la espada anterior.');}
+  if(!hasMats(rec.mats))return showMsg('No tienes suficientes materiales.');
+  consumeMats(rec.mats);
+  STATE.sword=recipeId.replace('sword_','');
+  showMsg(`⚔️ ${rec.name} crafteada!`);
+  buildInventoryUI();updateSwordHUD();buildCraftUI();saveState();
+}
+function buildCraftUI(){
+  const div=document.getElementById('craft-recipes');div.innerHTML='';
+  RECIPES.forEach(rec=>{
+    const canMake=hasMats(rec.mats);
+    const needsPrev=rec.requires?STATE.sword===rec.requires.replace('sword_',''):true;
+    const d=document.createElement('div');
+    d.className='craft-recipe'+((!canMake||!needsPrev)?' disabled':'');
+    const matStr=Object.entries(rec.mats).map(([m,q])=>`${q}x ${m}`).join(' + ');
+    d.innerHTML=`<div class="craft-icon">${rec.icon}</div><div class="craft-info"><div class="craft-name">${rec.name}</div><div class="craft-mats">${matStr} (${canMake&&needsPrev?'✓ Puedes craftear':'✗ Faltan materiales'})</div></div><div class="craft-btn-label">Craftear</div>`;
+    if(canMake&&needsPrev)d.onclick=()=>craftItem(rec.id);
+    div.appendChild(d);
+  });
 }
 
-// ── ENTRADA MÁGICA ──
-function showEntry(title, text, location) {
-  setTimeout(()=>{
-    STATE.entryOpen=true;
-    if(isPointerLocked)document.exitPointerLock();
-    document.getElementById('entry-title').textContent=title;
-    document.getElementById('entry-location').textContent=location;
-    document.getElementById('entry-text').textContent=text;
-    document.getElementById('entry-panel').style.display='block';
-  },500);
-}
-window.closeEntry=function(){STATE.entryOpen=false;document.getElementById('entry-panel').style.display='none';if(STATE.gameStarted)requestPointerLock();};
-
-// ── INVENTARIO ──
-function buildInventoryUI() {
-  const grid=document.getElementById('inv-grid'); grid.innerHTML='';
+// ── INVENTARIO / COMER ──
+function buildInventoryUI(){
+  const grid=document.getElementById('inv-grid');grid.innerHTML='';
   for(let i=0;i<INVENTORY_SIZE;i++){
-    const slot=document.createElement('div'); slot.className='inv-slot';
+    const slot=document.createElement('div');slot.className='inv-slot';
     const item=STATE.inventory[i];
-    if(item){slot.classList.add('has-item');slot.textContent=item.icon||'📦';slot.innerHTML+=`<div class="tooltip">${item.name}</div>`;slot.onclick=()=>showItemDetail(item);}
+    if(item){
+      slot.classList.add('has-item');
+      if(item.type==='food_raw'||item.type==='food')slot.classList.add('edible');
+      slot.textContent=item.icon||'📦';
+      if(item.qty>1)slot.innerHTML+=`<span class="qty">${item.qty}</span>`;
+      slot.innerHTML+=`<div class="tooltip">${item.name}</div>`;
+      slot.onclick=()=>showItemDetail(item);
+    }
     grid.appendChild(slot);
   }
 }
-function showItemDetail(item) {
+function showItemDetail(item){
   const d=document.getElementById('inv-detail');
-  d.innerHTML=`<strong style="color:#c8a96e">${item.name}</strong><br><br>${item.desc||item.desc_unlocked||'Un objeto misterioso.'}`;
+  if(item.type==='food_raw'){
+    d.innerHTML=`<strong style="color:#c8a96e">${item.icon} ${item.name}</strong><br>${item.desc||'Recupera hambre.'}<br><br><button onclick="eatItem('${item.id}')" style="background:transparent;border:1px solid #4a8a20;color:#6aaa30;font-family:Georgia;padding:4px 12px;cursor:pointer;border-radius:3px;">🍖 Comer (+${item.hungerVal||25} hambre)</button>`;
+  } else {
+    d.innerHTML=`<strong style="color:#c8a96e">${item.icon||''} ${item.name}</strong><br><br>${item.desc||item.desc_unlocked||''}`;
+  }
 }
-window.toggleInventory=function(){
-  STATE.inventoryOpen=!STATE.inventoryOpen;
-  document.getElementById('inventory-panel').style.display=STATE.inventoryOpen?'block':'none';
-  if(STATE.inventoryOpen){if(isPointerLocked)document.exitPointerLock();document.getElementById('inv-detail').textContent='Selecciona un objeto para ver su descripción.';}
-  else if(STATE.gameStarted)requestPointerLock();
+window.eatItem=function(id){
+  const idx=STATE.inventory.findIndex(i=>i.id===id);if(idx<0)return;
+  const item=STATE.inventory[idx];
+  STATE.hunger=Math.min(STATE.maxHunger,STATE.hunger+(item.hungerVal||25));
+  STATE.inventory.splice(idx,1);
+  showMsg(`🍖 Comiste ${item.name}. Hambre recuperada.`);
+  buildInventoryUI();updateBarsUI();saveState();
 };
 
-// ── MAPA ──
-window.toggleMap=function(){
-  STATE.mapPanelOpen=!STATE.mapPanelOpen;
-  const panel=document.getElementById('map-panel');
-  if(STATE.mapPanelOpen){
-    if(isPointerLocked)document.exitPointerLock();
-    buildMapUI();
-    panel.style.display='block';
-  } else {
-    panel.style.display='none';
-    if(STATE.gameStarted)requestPointerLock();
-  }
-};
-function buildMapUI() {
-  const rows=document.getElementById('map-rows'); rows.innerHTML='';
-  const portals=[
-    {num:1,label:'Portal 1 — Fuego 🔥',color:'#ff5500'},
-    {num:2,label:'Portal 2 — Hielo ❄️',color:'#44aaff'},
-    {num:3,label:'Portal 3 — Oscuridad 🌑',color:'#9955ff'},
-    {num:4,label:'Portal 4 — Luz ☀️',color:'#ffee44'},
-    {num:5,label:'Portal 5 — Cielo 🌤️',color:'#44ccff'},
-    {num:0,label:'Portal Secreto — La Origen ✨',color:'#ff88ff'}
-  ];
-  portals.forEach(p=>{
-    const visited=STATE.portalsVisited.includes(p.num);
-    const unlocked=STATE.portalsUnlocked.includes(p.num)||(p.num===0&&STATE.secretMapFound);
-    const row=document.createElement('div'); row.className='map-portal-row';
-    const dot=document.createElement('div'); dot.className='map-dot'; dot.style.background=visited?p.color:'transparent'; dot.style.border=`2px solid ${p.color}`; dot.style.borderRadius='50%';
-    const name=document.createElement('div'); name.className='map-portal-name'; name.textContent=p.label;
-    const status=document.createElement('div'); status.className='map-portal-status';
-    if(visited){status.textContent='✓ Visitado';status.classList.add('status-visited');}
-    else if(unlocked){status.textContent='Disponible';status.classList.add('status-unlocked');}
-    else{status.textContent='🔒 Bloqueado';status.classList.add('status-locked');}
-    row.appendChild(dot); row.appendChild(name); row.appendChild(status);
+// ── ESPADA ──
+function toggleSword(){
+  if(!STATE.sword){showMsg('Primero craftea una espada. [ C ]');return;}
+  STATE.swordEquipped=!STATE.swordEquipped;updateSwordHUD();
+  showMsg(STATE.swordEquipped?'⚔️ Espada equipada — clic izquierdo para atacar':'✊ Espada guardada');
+}
+function updateSwordHUD(){
+  const icons={madera:'🪵',piedra:'🪨',magica:'⚔️'};
+  const rec=RECIPES.find(r=>r.id==='sword_'+STATE.sword);
+  document.getElementById('sword-icon').textContent=STATE.swordEquipped?(icons[STATE.sword]||'⚔️'):'✊';
+  document.getElementById('sword-name').textContent=STATE.swordEquipped?(rec?.name||'Espada'):'Sin arma';
+  document.getElementById('sword-dmg').textContent=STATE.swordEquipped?`Daño: ${rec?.dmg||0}`:'[ F ] equipar';
+}
+
+// ── BARRAS ──
+function updateBarsUI(){
+  const hp=Math.max(0,STATE.hp),hunger=Math.max(0,STATE.hunger);
+  document.getElementById('hp-fill').style.width=(hp/STATE.maxHp*100)+'%';
+  document.getElementById('hp-text').textContent=Math.ceil(hp);
+  document.getElementById('hunger-fill').style.width=(hunger/STATE.maxHunger*100)+'%';
+  document.getElementById('hunger-text').textContent=Math.ceil(hunger)+'%';
+}
+
+// ── PANELES ──
+window.toggleInventory=function(){STATE.inventoryOpen=!STATE.inventoryOpen;document.getElementById('inventory-panel').style.display=STATE.inventoryOpen?'block':'none';if(STATE.inventoryOpen){if(isPointerLocked)document.exitPointerLock();document.getElementById('inv-detail').textContent='Selecciona un objeto. Los alimentos 🟢 puedes comerlos.';}else if(STATE.gameStarted)requestPointerLock();};
+window.toggleCraft=function(){STATE.craftOpen=!STATE.craftOpen;document.getElementById('craft-panel').style.display=STATE.craftOpen?'block':'none';if(STATE.craftOpen){if(isPointerLocked)document.exitPointerLock();buildCraftUI();}else if(STATE.gameStarted)requestPointerLock();};
+window.toggleMap=function(){STATE.mapPanelOpen=!STATE.mapPanelOpen;const p=document.getElementById('map-panel');if(STATE.mapPanelOpen){if(isPointerLocked)document.exitPointerLock();buildMapUI();p.style.display='block';}else{p.style.display='none';if(STATE.gameStarted)requestPointerLock();}};
+function buildMapUI(){
+  const rows=document.getElementById('map-rows');rows.innerHTML='';
+  [{num:1,label:'Portal 1 — Fuego 🔥',color:'#ff5500'},{num:2,label:'Portal 2 — Hielo ❄️',color:'#44aaff'},{num:3,label:'Portal 3 — Oscuridad 🌑',color:'#9955ff'},{num:4,label:'Portal 4 — Luz ☀️',color:'#ffee44'},{num:5,label:'Portal 5 — Cielo 🌤️',color:'#44ccff'},{num:0,label:'Portal Secreto ✨',color:'#ff88ff'}].forEach(p=>{
+    const v=STATE.portalsVisited.includes(p.num),u=STATE.portalsUnlocked.includes(p.num)||(p.num===0&&STATE.secretMapFound);
+    const row=document.createElement('div');row.className='map-row';
+    row.innerHTML=`<div class="map-dot" style="background:${v?p.color:'transparent'};border-color:${p.color}"></div><div class="map-name">${p.label}</div><div class="map-status ${v?'s-visited':u?'s-open':'s-locked'}">${v?'✓ Visitado':u?'Disponible':'🔒'}</div>`;
     rows.appendChild(row);
   });
-  // Estado del mapa secreto
-  const mapRow=document.createElement('div'); mapRow.style='margin-top:1rem;padding-top:.8rem;border-top:1px solid #3a2a18;font-size:.8rem;color:#8a7a60;';
-  mapRow.textContent=STATE.secretMapFound?'🗺️ Mapa de La Origen encontrado — Portal Secreto desbloqueado':STATE.mapReadable?'🗺️ Hay un mapa en la Mansión que ahora puedes leer...':'🗺️ El mapa del portal secreto está en la Mansión (bloqueado)';
-  rows.appendChild(mapRow);
 }
-
-// ── HUD DE PROGRESO ──
-function updateProgressHUD() {
-  for(let i=1;i<=5;i++){
-    const dot=document.getElementById(`dot-${i}`);
-    if(!dot)continue;
-    if(STATE.portalsVisited.includes(i)){dot.classList.add('visited');dot.classList.remove('unlocked');}
-    else if(STATE.portalsUnlocked.includes(i)){dot.classList.add('unlocked');dot.classList.remove('visited');}
-    else{dot.classList.remove('visited','unlocked');}
-  }
-  const visited=STATE.portalsVisited.length;
+function showEntry(title,text,location){
+  setTimeout(()=>{STATE.entryOpen=true;if(isPointerLocked)document.exitPointerLock();document.getElementById('entry-title').textContent=title;document.getElementById('entry-location').textContent=location;document.getElementById('entry-text').textContent=text;document.getElementById('entry-panel').style.display='block';},500);
+}
+window.closeEntry=function(){STATE.entryOpen=false;document.getElementById('entry-panel').style.display='none';if(STATE.gameStarted)requestPointerLock();};
+function updateProgressHUD(){
+  for(let i=1;i<=5;i++){const d=document.getElementById('dot-'+i);if(!d)continue;if(STATE.portalsVisited.includes(i)){d.classList.add('visited');d.classList.remove('unlocked');}else if(STATE.portalsUnlocked.includes(i)){d.classList.add('unlocked');d.classList.remove('visited');}else d.classList.remove('visited','unlocked');}
   const st=document.getElementById('status-text');
-  if(STATE.endingShown) st.textContent='¡Aventura completada! ✨';
-  else if(STATE.secretMapFound) st.textContent='¡Portal secreto desbloqueado!';
-  else if(STATE.mapReadable) st.textContent='Regresa a la Mansión — lee el mapa';
-  else if(visited>=5) st.textContent='Regresa a la Mansión';
-  else if(visited>0) st.textContent=`Busca el Portal ${visited+1}`;
-  else st.textContent='Encuentra el Portal 1';
+  if(STATE.endingShown)st.textContent='¡Aventura completada! ✨';
+  else if(STATE.secretMapFound)st.textContent='¡Portal secreto desbloqueado!';
+  else if(STATE.mapReadable)st.textContent='Regresa a la Mansión';
+  else if(STATE.portalsVisited.length>0)st.textContent=`Busca Portal ${STATE.portalsVisited.length+1}`;
+  else st.textContent='Sal de la Mansión y explora';
 }
-
-function showMsg(text){const msg=document.getElementById('pickup-msg');msg.textContent=text;msg.style.opacity='1';clearTimeout(msg._t);msg._t=setTimeout(()=>{msg.style.opacity='0';},3000);}
-function saveState(){localStorage.setItem('aw2_state',JSON.stringify({currentWorld:STATE.currentWorld,portalsVisited:STATE.portalsVisited,portalsUnlocked:STATE.portalsUnlocked,mapReadable:STATE.mapReadable,secretMapFound:STATE.secretMapFound,inventory:STATE.inventory,character:STATE.character}));}
+function showLockedMsg(text){const el=document.getElementById('locked-msg');document.getElementById('locked-text').textContent=text;el.style.display='block';clearTimeout(el._t);el._t=setTimeout(()=>{el.style.display='none';},3000);}
+function showMsg(text){const m=document.getElementById('pickup-msg');m.textContent=text;m.style.opacity='1';clearTimeout(m._t);m._t=setTimeout(()=>{m.style.opacity='0';},3000);}
+function showEnding(){STATE.endingShown=true;const n=STATE.character?.name||'Maca';document.getElementById('ending-text').textContent=`Lo encontraste, ${n}. El portal que une todos los mundos. Ahora entiendes por qué la Mansión existía. Todo comenzó aquí, en La Origen.`;document.getElementById('canvas').style.display='none';document.getElementById('hud').style.display='none';document.getElementById('ending').style.display='flex';}
+function saveState(){localStorage.setItem('aw3_state',JSON.stringify({currentWorld:STATE.currentWorld,portalsVisited:STATE.portalsVisited,portalsUnlocked:STATE.portalsUnlocked,mapReadable:STATE.mapReadable,secretMapFound:STATE.secretMapFound,inventory:STATE.inventory,character:STATE.character,sword:STATE.sword,challengeState:STATE.challengeState,hp:STATE.hp,hunger:STATE.hunger}));}
 
 // ── LOOP ──
 function animate(){
   requestAnimationFrame(animate);
   const delta=Math.min(clock.getDelta(),.05);
-  if(STATE.gameStarted){updateMovement(delta);checkNearbyObjects(delta);checkPortals(delta);}
+  if(STATE.gameStarted&&!STATE.isDead){
+    updateMovement(delta);
+    checkNearbyObjects(delta);
+    checkPortals(delta);
+    updateEnemies(delta);
+    updateSurvival(delta);
+  }
   renderer.render(scene,camera);
 }
 
-window.addEventListener('load',()=>{if(localStorage.getItem('aw2_state'))document.getElementById('btn-load').style.display='block';});
-window.startNewGame=startNewGame; window.loadGame=loadGame;
-window.showCharCreator=showCharCreator; window.closeCharCreator=closeCharCreator;
-window.selectClass=selectClass; window.saveCharacter=saveCharacter;
+window.addEventListener('load',()=>{if(localStorage.getItem('aw3_state'))document.getElementById('btn-load').style.display='block';});
+window.startNewGame=startNewGame;window.loadGame=loadGame;window.showCharCreator=showCharCreator;window.closeCharCreator=closeCharCreator;window.selectClass=selectClass;window.saveCharacter=saveCharacter;
