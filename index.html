@@ -804,8 +804,8 @@ function buildPillarsRoom(W){
   const pMat=new THREE.MeshLambertMaterial({color:W.wallB}),cMat=new THREE.MeshLambertMaterial({color:W.wallA});
   [[-6,-6],[6,-6],[-6,6],[6,6],[-6,0],[6,0]].forEach(([x,z])=>{
     const p=new THREE.Mesh(new THREE.BoxGeometry(.7,5.,.7),pMat);p.position.set(x,2.5,z);p.castShadow=true;scene.add(p);
-    scene.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(1.,.3,1.),cMat),{position:new THREE.Vector3(x,.15,z)}));
-    scene.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(1.1,.28,1.1),cMat),{position:new THREE.Vector3(x,5.05,z)}));
+    const base=new THREE.Mesh(new THREE.BoxGeometry(1.,.3,1.),cMat);base.position.set(x,.15,z);scene.add(base);
+    const cap=new THREE.Mesh(new THREE.BoxGeometry(1.1,.28,1.1),cMat);cap.position.set(x,5.05,z);scene.add(cap);
     const fl=new THREE.PointLight(0xffaa44,1.,8);fl.position.set(x+.5,3.5,z+.5);scene.add(fl);
   });
 }
@@ -818,7 +818,7 @@ function buildPillarsDim(W,worldId){
 }
 function buildFurniture(W){
   const wood=new THREE.MeshLambertMaterial({color:0x5c3a1e}),rug=new THREE.MeshLambertMaterial({color:0x8b2020});
-  scene.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(6,.05,10),rug),{position:new THREE.Vector3(0,.05,-2)}));
+  const rugMesh=new THREE.Mesh(new THREE.BoxGeometry(6,.05,10),rug);rugMesh.position.set(0,.05,-2);scene.add(rugMesh);
   const t=new THREE.Mesh(new THREE.BoxGeometry(4.5,.18,2.2),wood);t.position.set(0,1.02,-4);t.castShadow=true;scene.add(t);
   [[1.8,-.9],[1.8,.9],[-1.8,-.9],[-1.8,.9]].forEach(([dx,dz])=>{const l=new THREE.Mesh(new THREE.BoxGeometry(.12,1.02,.12),new THREE.MeshLambertMaterial({color:0x3a2010}));l.position.set(dx,.51,-4+dz);scene.add(l);});
   const sh=new THREE.Mesh(new THREE.BoxGeometry(.3,4.,4.5),new THREE.MeshLambertMaterial({color:0x4a2a0e}));sh.position.set(-11.5,2.,-6);sh.castShadow=true;scene.add(sh);
@@ -826,7 +826,7 @@ function buildFurniture(W){
   // Chimenea
   const sm=new THREE.MeshLambertMaterial({color:0x9a8060});
   const fm=new THREE.Mesh(new THREE.BoxGeometry(3.6,4.,.6),sm);fm.position.set(11.5,2.,-6);fm.castShadow=true;scene.add(fm);
-  scene.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(2.,1.8,.8),new THREE.MeshLambertMaterial({color:0x3a2010})),{position:new THREE.Vector3(11.5,1.,-6)}));
+  const hole=new THREE.Mesh(new THREE.BoxGeometry(2.,1.8,.8),new THREE.MeshLambertMaterial({color:0x3a2010}));hole.position.set(11.5,1.,-6);scene.add(hole);
   const fL=new THREE.PointLight(0xff7700,2.8,14);fL.position.set(10.8,1.5,-6);scene.add(fL);
   [0,.3,-.3].forEach((ox,i)=>{const fl=new THREE.Mesh(new THREE.SphereGeometry(.18+i*.06,8,8),new THREE.MeshBasicMaterial({color:i===0?0xff9900:0xff4400}));fl.position.set(11.2+ox,1.+i*.1,-6+ox*.4);fl.userData.fireFlicker=true;fl.userData.flickerOffset=i*.6;scene.add(fl);});
 }
